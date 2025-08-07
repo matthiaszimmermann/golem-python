@@ -109,11 +109,6 @@ Got extend event: %s
     )
 
     if await client.is_connected():
-        account = client.http_client().eth.account.from_key(key_bytes)
-        account_address = account.address
-        balance = await client.http_client().eth.get_balance(account_address)
-        logger.info(f"Using account address: {account_address}, balance: {balance}")
-
         logger.info("""\n
         *****************************
         * Checking basic methods... *

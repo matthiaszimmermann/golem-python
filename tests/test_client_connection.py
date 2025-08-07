@@ -60,8 +60,19 @@ async def test_client_contract_address(client: GolemBaseClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_client_http_client(client: GolemBaseClient) -> None:
-    """Test that the client provides access to the HTTP client."""
-    # Test accessing the HTTP client
-    http_client = client.http_client()
-    assert http_client is not None
+async def test_client_account(client: GolemBaseClient) -> None:
+    """Test that the client is connected to a valid address and has some funding."""
+    account_address = client.get_account_address()
+    assert account_address is not None
+    assert isinstance(account_address, str)
+    logger.info(f"Client account address: {account_address}")  # noqa: G004
+
+    assert client.http_client().is_address(account_address), (
+        "Account address should be valid"
+    )
+
+    account_balance = await client.http_client().eth.get_balance(account_address)
+    assert isinstance(account_balance, int), "Account balance should be an integer"
+    logger.info(f"Client account balance: ETH {account_balance / 10**18}")  # noqa: G004
+
+    assert account_balance > 0, "Account should have a balance > 0"

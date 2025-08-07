@@ -94,7 +94,7 @@ code .
 4. When prompted, click "Reopen in Container"
 
 
-## Copy the Privat Key
+## Copy the Private Key
 
 1. Open a new terminal on your host machine
 2. `cd` into the golem-python repository
