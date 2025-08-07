@@ -1,0 +1,300 @@
+Metadata-Version: 2.4
+Name: default
+Version: 0.1.0
+Summary: This repository contains configurations to set up a Python development environment using VSCode's Dev Container feature. The environment includes uv and Ruff.
+License: MIT License
+        
+        Copyright (c) 2024 a5chin
+        
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+        
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+        
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+        
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: anyio>=4.10.0
+Requires-Dist: eth-account>=0.13.7
+Requires-Dist: golem-base-sdk>=0.0.3
+Requires-Dist: pydantic[email]<3.0.0,>=2.10.6
+Requires-Dist: pytz<2025.0,>=2024.2
+Dynamic: license-file
+
+# Golem Base using Python SDK
+
+## Clone this Repository
+
+1. Install [Docker](https://www.docker.com/get-started) and [VS Code](https://code.visualstudio.com/)
+2. Clone this repository:
+```bash
+git clone https://github.com/matthiaszimmermann/golem-python.git
+```
+
+3. Open the project in VS Code:
+```bash
+cd golem-python
+code .
+```
+4. When prompted, click "Reopen in Container"
+
+
+## Spin up your Golem Base Node
+
+1. Open a new terminal on your host machine
+2. Clone Golem Base Github repo.
+```bash
+git clone https://github.com/Golem-Base/golembase-op-geth
+cd golembase-op-geth
+```
+
+3. Spin up local services of node
+```bash
+docker compose up -d
+```
+
+4. Verify the services are running
+```bash
+docker compose ps
+```
+
+You should see an output similar to the output below
+```bash
+NAME                              IMAGE                           COMMAND                  SERVICE       CREATED        STATUS                  PORTS
+golembase-op-geth-mongodb-etl-1   golembase-op-geth-mongodb-etl   "/usr/local/bin/mong…"   mongodb-etl   18 hours ago   Up 18 hours             8545-8546/tcp, 30303/tcp, 30303/udp
+golembase-op-geth-op-geth-1       golembase-op-geth-op-geth       "geth --dev --http -…"   op-geth       18 hours ago   Up 18 hours (healthy)   0.0.0.0:8545->8545/tcp, [::]:8545->8545/tcp
+golembase-op-geth-rpcplorer-1     dmilhdef/rpcplorer:v0.0.1       "/app/service"           rpcplorer     18 hours ago   Up 18 hours             0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp
+golembase-op-geth-sqlite-etl-1    golembase-op-geth-sqlite-etl    "/usr/local/bin/sqli…"   sqlite-etl    18 hours ago   Up 18 hours             8545-8546/tcp, 30303/tcp, 30303/udp
+mongodb                           mongo:8.0.6                     "docker-entrypoint.s…"   mongodb       18 hours ago   Up 18 hours (healthy)   0.0.0.0:27017->27017/tcp, [::]:27017->27017/tcp
+```
+
+## Check your Golem Base Setup
+
+1. Check the Golem Base Explorer
+
+Open the Golem Base Explorer in your browser [http://localhost:8080/](http://localhost:8080/)
+
+2. Check the Golem Base CLI is running
+
+Open a shell in the container which runs the Golem Base CLI
+```bash
+docker exec -it golembase-op-geth-op-geth-1 sh
+```
+
+In the opened shell check `golembase` is available (which should print `/usr/local/bin/golembase`)
+then show the help page of `golembase`
+```bash
+which golembase
+golembase help
+```
+
+## Create and Fund a New Account
+
+```bash
+golembase account create
+```
+
+Address and the file holding the private key are logged on the command line as shown below.
+
+```bash
+privageKeyPath /root/.config/golembase/private.key
+Private key generated and saved to /root/.config/golembase/private.key
+Address: 0xDF0fdD46CE72E55E96ab3b3Eb3d63eEE6aFeD749
+```
+
+Fund the newly created account and check its balance
+```bash
+golembase account fund
+golembase account balance
+```
+
+The account balance should show 100 ETH (the default funding amount)
+```bash
+Address: 0xDF0fdD46CE72E55E96ab3b3Eb3d63eEE6aFeD749
+Balance: 100 ETH
+```
+
+The same balance should be shown in the Golem Base Explorer [http://localhost:8080/](http://localhost:8080/)
+
+## Copy the Privat Key
+
+1. Open a new terminal on your host machine
+2. `cd` into the golem-python repository
+3. Copy the account private key from the Golem Base container to your host machine
+```bash
+docker cp golembase-op-geth-op-geth-1:/root/.config/golembase/private.key ./private.key
+```
+
+
+## Install
+
+```bash
+uv pip install -e .
+```
+
+### Interact with local golem node
+
+On the host machine: cd into the home directory of this Golem Python repository.
+Connect to shell in Docker container running the local Golem Base node.
+
+```bash
+cd ../golem-python
+docker exec -it golembase-op-geth-op-geth-1 sh
+```
+
+Inside the container:
+
+```bash
+/usr/local/bin/golembase help
+```
+
+### Create and Fund a new Account
+
+Inside the golem base container the CLI can be used to create a new account.
+
+```bash
+/usr/local/bin/golembase account create
+```
+
+Address and the file holding the private key are logged on the command line as shown below.
+
+```bash
+privageKeyPath /root/.config/golembase/private.key
+Private key generated and saved to /root/.config/golembase/private.key
+Address: 0xDF0fdD46CE72E55E96ab3b3Eb3d63eEE6aFeD749
+```
+
+Before the account is ready to use it needs to be funded.
+This can be also done using the CLI tool.
+
+```bash
+/usr/local/bin/golembase account fund
+/usr/local/bin/golembase account balance
+```
+
+The second command prints the current balance
+
+```bash
+Address: 0xDF0fdD46CE72E55E96ab3b3Eb3d63eEE6aFeD749
+Balance: 100 ETH
+```
+
+CD into the golem-python repository
+Copy the account private key file to the host machine
+
+```bash
+docker cp golembase-op-geth-op-geth-1:/root/.config/golembase/private.key ./private.key
+```
+
+### Run Script
+
+Run script against local node.
+When running the script inside the devcontainer setup update the LOCALHOST constant accordingly (change default "localhost" to "host.docker.internal").
+
+```bash
+uv run -m main --instance local
+```
+
+
+## Features
+
+- **Dev Containers**: Consistent development environment across team members using VS Code and Docker
+- **Modern Tooling**:
+  - `uv`: Fast, reliable Python package management
+  - `ruff`: All-in-one Python linter and formatter
+  - `pyright`: Static type checking
+  - `pytest`: Testing framework
+- **Structured Logging**: Pre-configured JSON-based logging setup for structured, consistent log output
+- **Type Safety**: Built-in support for Pydantic data validation and serialization
+- **Quality Assurance**: Comprehensive linting, formatting, and testing pipeline
+
+## TODO Update/Cleanup Old Readme below
+
+1. Install [Docker](https://www.docker.com/get-started) and [VS Code](https://code.visualstudio.com/)
+2. Clone this repository:
+```bash
+git clone https://github.com/matthiaszimmermann/python-base.git
+```
+3. Open the project in VS Code:
+```bash
+code python-base
+```
+4. When prompted, click "Reopen in Container"
+
+## Example Usage
+
+Add the local modules
+```bash
+uv pip install -e .
+```
+Run the examples:
+```sh
+uv run -m main
+uv run -m examples.user
+uv run -m examples.flight
+```
+
+## Development Workflow
+
+### Code Quality Tools
+
+The project uses `ruff` for both linting and formatting. Run the following command to check your code:
+```bash
+uv run ruff format . --check --diff
+```
+
+The project uses `pyright` for type checking. Run the following command to check your code:
+```bash
+uv run pyright
+```
+
+### Testing
+
+Run the test suite with:
+```bash
+uv run pytest
+```
+
+### Logging
+
+The project provides a centralized logging configuration through `logging_config.py` that:
+- Loads structured logging settings from `logging_config.json`
+- Ensures the configuration is loaded only once
+- Provides a convenient `get_logger()` function for consistent logger creation
+
+The JSON configuration includes:
+- Structured logging with timestamp, logger name, level, and message
+- Console output for development
+- Configurable log levels (default: DEBUG for loggers, INFO for console output)
+- Extensible format for adding custom handlers (e.g., file output, external services)
+
+To use logging in your modules:
+```python
+from logging_config import get_logger
+
+logger = get_logger(__name__)
+logger.info("Application started")
+```
+
+## Contributing
+
+This repository follows modern Python development practices. All configuration is centralized in `pyproject.toml` for maintainability. Before contributing:
+
+1. Ensure your code passes all linting checks (`uv run ruff check`)
+2. Ensure your code passes all existing unit tests (`uv run pytest`)
+3. Add tests for new functionality
+4. Update documentation as needed
+5. Verify all CI checks pass

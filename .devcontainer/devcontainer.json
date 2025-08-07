@@ -1,0 +1,41 @@
+{
+    "name": "Python Dev Container",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/github-cli:1": {}
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "git.editor": "nano",
+                "files.insertFinalNewline": true,
+                "files.trimTrailingWhitespace": true,
+                "python.defaultInterpreterPath": "/workspace/.venv/bin/python",
+                "python.terminal.activateEnvironment": true,
+                "python.formatting.provider": "ruff",
+                "python.analysis.extraPaths": ["./src"],
+                "python.autoComplete.extraPaths": ["./src"],
+                "[python]": {
+                    "editor.codeActionsOnSave": {
+                        "source.fixAll": "explicit",
+                        "source.organizeImports": "explicit"
+                    },
+                    "editor.defaultFormatter": "charliermarsh.ruff",
+                    "editor.formatOnSave": true,
+                    "editor.tabSize": 4
+                }
+            },
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "charliermarsh.ruff",
+                "ms-azuretools.vscode-docker",
+                "tamasfe.even-better-toml",
+                "redhat.vscode-yaml"
+            ]
+        }
+    },
+    "postCreateCommand": "uv sync && git config --global core.editor nano"
+}
