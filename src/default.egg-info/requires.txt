@@ -1,5 +1,0 @@
-anyio>=4.10.0
-eth-account>=0.13.7
-golem-base-sdk>=0.0.3
-pydantic[email]<3.0.0,>=2.10.6
-pytz<2025.0,>=2024.2
