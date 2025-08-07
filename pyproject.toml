@@ -12,13 +12,20 @@ dependencies = [
     "eth-account>=0.13.7",
     "golem-base-sdk>=0.0.3",
     "pydantic[email]>=2.10.6,<3.0.0",
+    "pytest-asyncio>=1.1.0",
     "pytz>=2024.2,<2025.0",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

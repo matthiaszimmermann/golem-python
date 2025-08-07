@@ -1,36 +1,21 @@
 # Golem Base using Python SDK
 
-## Clone this Repository
+## Spin up a Local Golem Base Node
 
-1. Install [Docker](https://www.docker.com/get-started) and [VS Code](https://code.visualstudio.com/)
-2. Clone this repository:
-```bash
-git clone https://github.com/matthiaszimmermann/golem-python.git
-```
-
-3. Open the project in VS Code:
-```bash
-cd golem-python
-code .
-```
-4. When prompted, click "Reopen in Container"
-
-
-## Spin up your Golem Base Node
-
-1. Open a new terminal on your host machine
-2. Clone Golem Base Github repo.
+1. Install [Git](https://git-scm.com/downloads), [Docker](https://www.docker.com/get-started) and [VS Code](https://code.visualstudio.com/)
+2. Open a new terminal on your host machine
+3. Clone the Golem Base Github repo.
 ```bash
 git clone https://github.com/Golem-Base/golembase-op-geth
 cd golembase-op-geth
 ```
 
-3. Spin up local services of node
+4. Spin up local services of node
 ```bash
 docker compose up -d
 ```
 
-4. Verify the services are running
+5. Verify the services are running
 ```bash
 docker compose ps
 ```
@@ -93,6 +78,22 @@ Balance: 100 ETH
 
 The same balance should be shown in the Golem Base Explorer [http://localhost:8080/](http://localhost:8080/)
 
+
+## Clone this Repository
+
+2. Clone this repository:
+```bash
+git clone https://github.com/matthiaszimmermann/golem-python.git
+```
+
+3. Open the project in VS Code:
+```bash
+cd golem-python
+code .
+```
+4. When prompted, click "Reopen in Container"
+
+
 ## Copy the Privat Key
 
 1. Open a new terminal on your host machine
@@ -102,163 +103,40 @@ The same balance should be shown in the Golem Base Explorer [http://localhost:80
 docker cp golembase-op-geth-op-geth-1:/root/.config/golembase/private.key ./private.key
 ```
 
+## Install Python SDK and Scripts
 
-## Install
+1. Open a bash terminal
 
+Your terminal inside the devcontainer setup should display a command prompt similar to the one shown below
+
+```bash
+root@e928153b72cc:/workspaces/golem-python#
+```
+
+Install the scripts.
 ```bash
 uv pip install -e .
 ```
 
-### Interact with local golem node
-
-On the host machine: cd into the home directory of this Golem Python repository.
-Connect to shell in Docker container running the local Golem Base node.
-
-```bash
-cd ../golem-python
-docker exec -it golembase-op-geth-op-geth-1 sh
-```
-
-Inside the container:
-
-```bash
-/usr/local/bin/golembase help
-```
-
-### Create and Fund a new Account
-
-Inside the golem base container the CLI can be used to create a new account.
-
-```bash
-/usr/local/bin/golembase account create
-```
-
-Address and the file holding the private key are logged on the command line as shown below.
-
-```bash
-privageKeyPath /root/.config/golembase/private.key
-Private key generated and saved to /root/.config/golembase/private.key
-Address: 0xDF0fdD46CE72E55E96ab3b3Eb3d63eEE6aFeD749
-```
-
-Before the account is ready to use it needs to be funded.
-This can be also done using the CLI tool.
-
-```bash
-/usr/local/bin/golembase account fund
-/usr/local/bin/golembase account balance
-```
-
-The second command prints the current balance
-
-```bash
-Address: 0xDF0fdD46CE72E55E96ab3b3Eb3d63eEE6aFeD749
-Balance: 100 ETH
-```
-
-CD into the golem-python repository
-Copy the account private key file to the host machine
-
-```bash
-docker cp golembase-op-geth-op-geth-1:/root/.config/golembase/private.key ./private.key
-```
-
-### Run Script
-
-Run script against local node.
-When running the script inside the devcontainer setup update the LOCALHOST constant accordingly (change default "localhost" to "host.docker.internal").
+## Run the 'main' Script
 
 ```bash
 uv run -m main --instance local
 ```
 
+## Run the Tests
 
-## Features
-
-- **Dev Containers**: Consistent development environment across team members using VS Code and Docker
-- **Modern Tooling**:
-  - `uv`: Fast, reliable Python package management
-  - `ruff`: All-in-one Python linter and formatter
-  - `pyright`: Static type checking
-  - `pytest`: Testing framework
-- **Structured Logging**: Pre-configured JSON-based logging setup for structured, consistent log output
-- **Type Safety**: Built-in support for Pydantic data validation and serialization
-- **Quality Assurance**: Comprehensive linting, formatting, and testing pipeline
-
-## TODO Update/Cleanup Old Readme below
-
-1. Install [Docker](https://www.docker.com/get-started) and [VS Code](https://code.visualstudio.com/)
-2. Clone this repository:
-```bash
-git clone https://github.com/matthiaszimmermann/python-base.git
-```
-3. Open the project in VS Code:
-```bash
-code python-base
-```
-4. When prompted, click "Reopen in Container"
-
-## Example Usage
-
-Add the local modules
-```bash
-uv pip install -e .
-```
-Run the examples:
-```sh
-uv run -m main
-uv run -m examples.user
-uv run -m examples.flight
-```
-
-## Development Workflow
-
-### Code Quality Tools
-
-The project uses `ruff` for both linting and formatting. Run the following command to check your code:
-```bash
-uv run ruff format . --check --diff
-```
-
-The project uses `pyright` for type checking. Run the following command to check your code:
-```bash
-uv run pyright
-```
-
-### Testing
-
-Run the test suite with:
+To run tests and only show summaries
 ```bash
 uv run pytest
 ```
 
-### Logging
-
-The project provides a centralized logging configuration through `logging_config.py` that:
-- Loads structured logging settings from `logging_config.json`
-- Ensures the configuration is loaded only once
-- Provides a convenient `get_logger()` function for consistent logger creation
-
-The JSON configuration includes:
-- Structured logging with timestamp, logger name, level, and message
-- Console output for development
-- Configurable log levels (default: DEBUG for loggers, INFO for console output)
-- Extensible format for adding custom handlers (e.g., file output, external services)
-
-To use logging in your modules:
-```python
-from logging_config import get_logger
-
-logger = get_logger(__name__)
-logger.info("Application started")
+To show result per test
+```bash
+uv run pytest -v
 ```
 
-## Contributing
-
-This repository follows modern Python development practices. All configuration is centralized in `pyproject.toml` for maintainability. Before contributing:
-
-1. Ensure your code passes all linting checks (`uv run ruff check`)
-2. Ensure your code passes all existing unit tests (`uv run pytest`)
-3. Add tests for new functionality
-4. Update documentation as needed
-5. Verify all CI checks pass
+To run a specific test and also show the logs from the test
+```bash
+uv run pytest tests/test_client_connection.py --log-cli-level=INFO
+```
