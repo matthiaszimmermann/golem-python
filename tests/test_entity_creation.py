@@ -13,6 +13,8 @@ from golem_base_sdk import (
     GolemBaseDelete,
 )
 
+from .utils import create_single_entity, get_entity_count, to_create_entity
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,34 +23,16 @@ async def test_create_entity_receipt(client: GolemBaseClient) -> None:
     """Test creating an entity and verify there is a creation receipt."""
     logger.info("Testing entity creation receipt...")
 
-    # Get initial entity count
-    entities_before = await client.get_entity_count()
-    assert entities_before is not None, "Entities count should not be None"
-    assert isinstance(entities_before, int), "Entities count should be int"
-    assert entities_before >= 0, "Entities count should be non-negative"
-    logger.info(f"Entities count before creation: {entities_before}")  # noqa: G004
+    # Get entity count
+    await get_entity_count(client, "before creation")
 
     # Create single entity
-    # for GolemBaseCreate see https://github.com/Golem-Base/python-sdk/blob/main/golem_base_sdk/types.py
     create_receipt = await client.create_entities(
-        [
-            GolemBaseCreate(
-                b"hello",  # data: bytes (payload to store)
-                60,  # ttl: int (time to live in blocks)
-                [
-                    Annotation("app", "demo")
-                ],  # string_annotations: Sequence[Annotation[str]]
-                [],
-            )  # numeric_annotations: Sequence[Annotation[int]
-        ]
+        [GolemBaseCreate(b"hello", 60, [Annotation("app", "test")], [])]
     )
 
-    # Get entity count after creation of a new entity
-    entities_after = await client.get_entity_count()
-    assert entities_after == entities_before + 1, (
-        "Entities count should increase by 1 after creation"
-    )
-    logger.info(f"Entities count after creation: {entities_after}")  # noqa: G004
+    # check entity count after creation might be useless as a number of
+    # entities may be deleted by houskeeping
 
     # Verify receipt exists and has expected structure
     assert create_receipt is not None, "Creation receipt should not be None"
@@ -77,9 +61,7 @@ async def test_create_entity_storage_value(client: GolemBaseClient) -> None:
     test_data = b"test_storage_data"
 
     # Create entity with specific test data
-    create_receipt = await client.create_entities(
-        [GolemBaseCreate(test_data, 60, [], [])]
-    )
+    create_receipt = await create_single_entity(client, test_data)
 
     entity_key = create_receipt[0].entity_key
     logger.info(f"Created entity with key: {entity_key.as_hex_string()}")  # noqa: G004
@@ -101,20 +83,19 @@ async def test_create_entity_metadata(client: GolemBaseClient) -> None:
     logger.info("Testing entity creation and metadata...")
 
     payload = b"test_metadata_data"
-    string_annotations = [
-        Annotation("app", "metadata_test"),
-        Annotation("version", "1.0"),
-    ]
-    numeric_annotations = [
-        Annotation("hasPayload", 1),
-        Annotation("priority", 10),
-        Annotation("size", 100),
-    ]
+    string_annotations = {
+        "app": "metadata_test",
+        "version": "1.0",
+    }
+    numeric_annotations = {
+        "hasPayload": 1,
+        "priority": 10,
+        "size": 100,
+    }
+    a = {**string_annotations, **numeric_annotations}
 
     # Create entity with metadata annotations
-    create_receipt = await client.create_entities(
-        [GolemBaseCreate(payload, 60, string_annotations, numeric_annotations)]
-    )
+    create_receipt = await create_single_entity(client, payload, annotations=a)
 
     entity_key = create_receipt[0].entity_key
     logger.info("Created entity with key: %s", entity_key)
@@ -126,9 +107,42 @@ async def test_create_entity_metadata(client: GolemBaseClient) -> None:
     assert hasattr(metadata, "expires_at_block"), (
         "Metadata should have expires_at_block"
     )
-    assert hasattr(metadata, "string_annotations") or hasattr(
-        metadata, "numeric_annotations"
-    ), "Metadata should have string_annotations or numeric_annotations"
+
+    assert hasattr(metadata, "string_annotations"), (
+        "Metadata should have string_annotations"
+    )
+    test_str_annotations = metadata.string_annotations
+    # check that string annotations have correct type and values
+    assert isinstance(test_str_annotations, list), "String annotations should be a list"
+    assert all(isinstance(ann, Annotation) for ann in test_str_annotations), (
+        "All string annotations should be Annotation instances"
+    )
+    assert len(test_str_annotations) == len(string_annotations.keys()), (
+        "Number of string annotations should match the size of the original dictionary"
+    )
+    assert all(
+        ann.value == string_annotations[ann.key] for ann in test_str_annotations
+    ), "All string annotation values should should match the expected values"
+
+    # check that numeric annotations have correct type and values
+    assert hasattr(metadata, "numeric_annotations"), (
+        "Metadata should have numeric_annotations"
+    )
+    test_num_annotations = metadata.numeric_annotations
+    assert isinstance(test_num_annotations, list), (
+        "Numeric annotations should be a list"
+    )
+    assert len(test_num_annotations) == len(numeric_annotations.keys()), (
+        "Number of numeric annotations should match the size of the original dictionary"
+    )
+    assert all(isinstance(ann, Annotation) for ann in test_num_annotations), (
+        "All numeric annotations should be Annotation instances"
+    )
+    assert all(
+        ann.value == numeric_annotations[ann.key] for ann in test_num_annotations
+    ), "All numeric annotation values should should match the expected values"
+
+    logger.info("Entity metadata: %s", metadata)
 
     logger.info("Metadata verified: %s", metadata)
 
@@ -139,13 +153,13 @@ async def test_create_multiple_entities(client: GolemBaseClient) -> None:
     logger.info("Testing multiple entity creation...")
 
     # Create multiple entities
-    entities_to_create = [
-        GolemBaseCreate(b"entity1", 60, [Annotation("app", "batch_test")], []),
-        GolemBaseCreate(b"entity2", 60, [Annotation("app", "batch_test")], []),
-        GolemBaseCreate(b"entity3", 60, [Annotation("app", "batch_test")], []),
-    ]
-
-    create_receipts = await client.create_entities(entities_to_create)
+    create_receipts = await client.create_entities(
+        [
+            to_create_entity(b"entity1", 60, {"app": "batch_test"}),
+            to_create_entity(b"entity2", 60, {"app": "batch_test"}),
+            to_create_entity(b"entity3", 60, {"app": "batch_test"}),
+        ]
+    )
 
     # Verify all entities were created
     assert create_receipts is not None, "Creation receipts should not be None"
@@ -169,3 +183,17 @@ async def test_create_multiple_entities(client: GolemBaseClient) -> None:
     # Clean up - delete all entities
     delete_objects = [GolemBaseDelete(key) for key in entity_keys]
     await client.delete_entities(delete_objects)
+
+
+def _to_annotations(a: dict[str, str]) -> list[Annotation[str]]:
+    annotations = []
+    for key, value in a.items():
+        annotations.append(Annotation(key, value))
+    return annotations
+
+
+def _to_numeric_annotations(a: dict[str, int]) -> list[Annotation[int]]:
+    annotations = []
+    for key, value in a.items():
+        annotations.append(Annotation(key, value))
+    return annotations

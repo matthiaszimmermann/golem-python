@@ -15,8 +15,8 @@
                 "python.defaultInterpreterPath": "/workspace/.venv/bin/python",
                 "python.terminal.activateEnvironment": true,
                 "python.formatting.provider": "ruff",
-                "python.analysis.extraPaths": ["./src"],
-                "python.autoComplete.extraPaths": ["./src"],
+                "python.analysis.extraPaths": ["./src", "./tests"],
+                "python.autoComplete.extraPaths": ["./src", "./tests"],
                 "[python]": {
                     "editor.codeActionsOnSave": {
                         "source.fixAll": "explicit",
