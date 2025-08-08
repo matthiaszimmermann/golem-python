@@ -116,7 +116,7 @@ Got extend event: %s
         """)
 
         block = await client.http_client().eth.get_block("latest")
-        logger.info("Retrieved block %s", block["number"])
+        logger.info("Retrieved block %s", block["number"])  # type: ignore  # noqa: PGH003
 
         logger.info("entity count: %s", await client.get_entity_count())
 

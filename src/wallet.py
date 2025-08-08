@@ -21,9 +21,5 @@ with WALLET_PATH.open("w") as f:
 print(f"Account address: {account.address}")
 print(f"Wallet file: {WALLET_PATH}")
 
-# fetch private key from the wallet file
-# with WALLET_PATH.open("r") as f:
-#     wallet_json = json.load(f)
-#     print(f"\nWallet json: {wallet_json}")
-#     account_key = Account.decrypt(wallet_json, password)
-#     print(f"Account private key: 0x{account_key.hex()}")
+# fetch private key from the wallet file: wallet_json = json.load(f)
+# to obtain decrypted key: account.decrypt(wallet_json, password)

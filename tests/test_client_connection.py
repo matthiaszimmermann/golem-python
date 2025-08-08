@@ -1,4 +1,4 @@
-"""Tests for GolemBaseClient connection and basic functionality."""
+"""Tests for GolemBaseClient connection and basic functionality."""  # noqa: INP001
 
 import logging
 
@@ -30,7 +30,7 @@ async def test_client_http(client: GolemBaseClient) -> None:
         "HTTP client should have an 'endpoint_uri' attribute"
     )
 
-    endpoint_uri = http_client.provider.endpoint_uri
+    endpoint_uri = http_client.provider.endpoint_uri  # type: ignore  # noqa: PGH003
     assert endpoint_uri, "Endpoint URI should not be None"
     assert isinstance(endpoint_uri, str), "Endpoint URI should be a string"
     logger.info("Client connection URI: %s", endpoint_uri)

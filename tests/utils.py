@@ -1,6 +1,7 @@
 """Utility functions for GolemBase SDK tests."""
 
 import logging
+import uuid
 from collections.abc import Sequence
 
 from golem_base_sdk import (
@@ -63,3 +64,8 @@ def to_annotations_int(a: dict[str, int]) -> list[Annotation[int]]:  # noqa: D10
     for key, value in a.items():
         annotations.append(Annotation(key, value))
     return annotations
+
+
+def generate_uuid() -> str:
+    """Generate a UUID value as a string."""
+    return str(uuid.uuid4())
