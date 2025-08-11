@@ -15,6 +15,9 @@ from golem_base_sdk import (
     GolemBaseUpdate,
 )
 
+# default instanc to run script
+INSTANCE = "local"
+
 LOG_LEVEL = "INFO"  # "DEBUG" for more verbose output, "WARNING" for less verbose output
 
 logging.config.dictConfig(
@@ -256,7 +259,7 @@ def main() -> None:
     parser.add_argument(
         "--instance",
         choices=INSTANCE_URLS.keys(),
-        default="kaolin",
+        default=INSTANCE,
         help="Which instance to connect to (default: kaolin)",
     )
     args = parser.parse_args()

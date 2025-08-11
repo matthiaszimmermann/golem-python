@@ -56,8 +56,17 @@ def setup_test_environment() -> Generator[None, None, None]:
 @pytest.fixture(scope="session")
 async def client() -> GolemBaseClient:
     """Fixture to provide a GolemBaseClient instance for tests."""
+    return await get_client()
+
+
+async def get_client() -> GolemBaseClient:
+    """Create a GolemBaseClient instance."""
     private_key = await _get_private_key()
-    return await _get_client(private_key)
+    return await GolemBaseClient.create(
+        rpc_url=INSTANCE_URLS[INSTANCE]["rpc"],
+        ws_url=INSTANCE_URLS[INSTANCE]["ws"],
+        private_key=private_key,
+    )
 
 
 async def _get_private_key() -> bytes:
@@ -66,12 +75,3 @@ async def _get_private_key() -> bytes:
         "rb",
     ) as f:
         return await f.read(32)
-
-
-async def _get_client(private_key: bytes) -> GolemBaseClient:
-    """Create a GolemBaseClient instance."""
-    return await GolemBaseClient.create(
-        rpc_url=INSTANCE_URLS[INSTANCE]["rpc"],
-        ws_url=INSTANCE_URLS[INSTANCE]["ws"],
-        private_key=private_key,
-    )
