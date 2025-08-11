@@ -1,3 +1,9 @@
+# Project-specific
+private.key
+wallet*.json
+*.key
+*.tmp
+
 # Python
 __pycache__/
 *.py[cod]
@@ -25,11 +31,6 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
-
-# Project-specific
-private.key
-*.key
-*.tmp
 
 # Tools
 .ruff_cache/

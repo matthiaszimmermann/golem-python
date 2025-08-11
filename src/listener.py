@@ -15,6 +15,10 @@ INSTANCE = "local"
 
 LOG_LEVEL = "INFO"
 
+ERR_CLIENT_CONNECT = 1
+ERR_CLIENT_DISCONNECT = 2
+ERR_LISTENER = 3
+
 logging.config.dictConfig(
     {
         "version": 1,
@@ -59,10 +63,28 @@ INSTANCE_URLS = {
 }
 
 
-# Global variable to handle graceful shutdown
+# Global variable to handle graceful shutdown of process
 shutdown_event = asyncio.Event()
 
 
+# Callback handler for Golem Base events
+def entity_creation_handler(create_event: object) -> None:  # noqa: D103
+    logger.info(f"Entity creation event {create_event}")  # noqa: G004
+
+
+def entity_update_handler(update_event: object) -> None:  # noqa: D103
+    logger.info(f"Entity update event {update_event}")  # noqa: G004
+
+
+def entity_deletion_handler(delete_event: object) -> None:  # noqa: D103
+    logger.info(f"Entity deletion event {delete_event}")  # noqa: G004
+
+
+def entity_extension_handler(extension_event: object) -> None:  # noqa: D103
+    logger.info(f"Entity extension event {extension_event}")  # noqa: G004
+
+
+# Signal handler for graceful shutdown
 def signal_handler(signum: int, _: object) -> None:
     """Handle shutdown signals gracefully."""
     logger.info("Received signal %s, shutting down...", signum)
@@ -70,52 +92,12 @@ def signal_handler(signum: int, _: object) -> None:
 
 
 async def listen_to_contract_events(instance: str) -> None:
-    """Listen to all events from the specified contract."""
+    """Shared method to listen to contract events."""
     client = None
     try:
-        # Load private key
-        async with await anyio.open_file("./private.key", "rb") as private_key_file:
-            key_bytes = await private_key_file.read(32)
-
-        # Create client
-        client = await GolemBaseClient.create(
-            rpc_url=INSTANCE_URLS[instance]["rpc"],
-            ws_url=INSTANCE_URLS[instance]["ws"],
-            private_key=key_bytes,
-        )
-
-        if not await client.is_connected():
-            logger.error("Could not connect to the network")
-            return
-
-        logger.info("Connected to %s network", instance)
-        logger.info("Monitoring GolemBase contract events")
-        logger.info(
-            "GolemBase contract address: %s", client.golem_base_contract.address
-        )
-
-        # Use the SDK's built-in event watching
-        await client.watch_logs(
-            label="contract_listener",
-            create_callback=lambda create: logger.info(
-                "CREATE Event - Entity Key: %s",
-                create.entity_key.as_hex_string(),
-            ),
-            update_callback=lambda update: logger.info(
-                "UPDATE Event - Entity Key: %s",
-                update.entity_key.as_hex_string(),
-            ),
-            delete_callback=lambda delete: logger.info(
-                "DELETE Event - Entity Key: %s",
-                delete.as_hex_string(),
-            ),
-            extend_callback=lambda extend: logger.info(
-                "EXTEND Event - Entity Key: %s, New Expiration: %s",
-                extend.entity_key.as_hex_string(),
-                extend.new_expiration_block,
-            ),
-        )
-
+        # Create client and start listening
+        client = await _create_client(instance)
+        await _setup_event_watching(client, "entity_creation_listener")
         logger.info("Event listener started. Press Ctrl+C to stop...")
 
         # Keep the listener running
@@ -132,68 +114,42 @@ async def listen_to_contract_events(instance: str) -> None:
                 await client.disconnect()
                 logger.info("Disconnected from client")
             except Exception:
-                logger.exception("Error during disconnect")
+                logger.exception("Disconnecting failed")
+                sys.exit(ERR_CLIENT_DISCONNECT)
 
 
-async def listen_with_websocket_subscription(instance: str) -> None:
-    """Alternative method using direct WebSocket subscriptions."""
-    client = None
-    try:
-        async with await anyio.open_file("./private.key", "rb") as private_key_file:
-            key_bytes = await private_key_file.read(32)
+async def _create_client(instance: str) -> GolemBaseClient:
+    # Load private key
+    async with await anyio.open_file("./private.key", "rb") as private_key_file:
+        key_bytes = await private_key_file.read(32)
 
-        client = await GolemBaseClient.create(
-            rpc_url=INSTANCE_URLS[instance]["rpc"],
-            ws_url=INSTANCE_URLS[instance]["ws"],
-            private_key=key_bytes,
-        )
+    # Create client
+    client = await GolemBaseClient.create(
+        rpc_url=INSTANCE_URLS[instance]["rpc"],
+        ws_url=INSTANCE_URLS[instance]["ws"],
+        private_key=key_bytes,
+    )
 
-        if not await client.is_connected():
-            logger.error("Could not connect to the network")
-            return
+    if not await client.is_connected():
+        logger.error("Could not connect to the network")
+        sys.exit(ERR_CLIENT_CONNECT)
 
-        logger.info("Connected to %s network", instance)
-        logger.info("Monitoring GolemBase contract events")
+    logger.info("Connected to %s network", instance)
+    logger.info("Monitoring GolemBase contract events")
+    logger.info("GolemBase contract address: %s", client.golem_base_contract.address)
 
-        # Use the SDK's built-in event watching (same as the polling method)
-        await client.watch_logs(
-            label="websocket_listener",
-            create_callback=lambda create: logger.info(
-                "CREATE Event - Entity Key: %s",
-                create.entity_key.as_hex_string(),
-            ),
-            update_callback=lambda update: logger.info(
-                "UPDATE Event - Entity Key: %s",
-                update.entity_key.as_hex_string(),
-            ),
-            delete_callback=lambda delete: logger.info(
-                "DELETE Event - Entity Key: %s",
-                delete.as_hex_string(),
-            ),
-            extend_callback=lambda extend: logger.info(
-                "EXTEND Event - Entity Key: %s, New Expiration: %s",
-                extend.entity_key.as_hex_string(),
-                extend.new_expiration_block,
-            ),
-        )
+    return client
 
-        logger.info("WebSocket event listener started. Press Ctrl+C to stop...")
 
-        # Keep the listener running
-        try:
-            await shutdown_event.wait()
-        except asyncio.CancelledError:
-            logger.info("Event listening cancelled")
-
-    except Exception:
-        logger.exception("Failed to start WebSocket listener")
-    finally:
-        if client:
-            try:
-                await client.disconnect()
-                logger.info("Disconnected from client")
-            except Exception:
-                logger.exception("Error during disconnect")
+async def _setup_event_watching(client: GolemBaseClient, label: str) -> None:
+    """Set up event watching with callbacks for all event types."""
+    await client.watch_logs(
+        label=label,
+        create_callback=lambda create: entity_creation_handler(create),
+        update_callback=lambda update: entity_update_handler(update),
+        delete_callback=lambda delete: entity_deletion_handler(delete),
+        extend_callback=lambda extend: entity_extension_handler(extend),
+    )
 
 
 def main() -> None:
@@ -221,15 +177,12 @@ def main() -> None:
     logger.info("Using %s method on %s network", args.method, args.instance)
 
     try:
-        if args.method == "websocket":
-            asyncio.run(listen_with_websocket_subscription(args.instance))
-        else:
-            asyncio.run(listen_to_contract_events(args.instance))
+        asyncio.run(listen_to_contract_events(args.instance))
     except KeyboardInterrupt:
         logger.info("Event listener stopped by user")
     except Exception:
         logger.exception("Event listener failed")
-        sys.exit(1)
+        sys.exit(ERR_LISTENER)
 
 
 if __name__ == "__main__":
