@@ -12,11 +12,12 @@ from golem_base_sdk import (
     EntityMetadata,
     GolemBaseClient,
     GolemBaseCreate,
+    UpdateEntityReturnType,
 )
+from websockets import ConnectionClosedOK
 
 from config import (
     DEFAULT_INSTANCE,
-    DEFAULT_LOG_LEVEL,
     ERR_LISTENER,
     INSTANCE_URLS,
     LOG_LEVELS,
@@ -24,7 +25,7 @@ from config import (
 from utils import create_golem_client, get_short_address, run_sync, setup_logging
 
 # Constants for message loop
-QUIT = "quit"
+LOG_LEVEL = "warn"
 CHAT_WIDTH = 80
 
 # Entity annotation data
@@ -38,7 +39,6 @@ MESSAGE_ANNOTATION = Annotation(COLLECTION, MESSAGES)
 
 # Global vars
 logger = logging.getLogger(__name__)
-client: GolemBaseClient
 
 
 def _print_incoming_message(payload: bytes, message_address: str) -> None:
@@ -74,10 +74,10 @@ def _get_annotations(metadata: EntityMetadata) -> dict[str, str | int]:
 
 
 # Event handler functions for Golem Base events
-def _entity_creation_handler(create_event: CreateEntityReturnType) -> None:
-    """Print message from other client."""
-    global client  # noqa: PLW0602
-
+def _entity_creation_handler(
+    client: GolemBaseClient, create_event: CreateEntityReturnType
+) -> None:
+    """Print message entities from other clients."""
     entity_key = create_event.entity_key
     metadata: EntityMetadata = run_sync(client.get_entity_metadata(entity_key))
     annotations = _get_annotations(metadata)
@@ -101,13 +101,14 @@ def _entity_creation_handler(create_event: CreateEntityReturnType) -> None:
     _print_incoming_message(payload, message_address)
 
 
-def _entity_update_handler(update_event: object) -> None:
+def _entity_update_handler(
+    client: GolemBaseClient,  # noqa: ARG001
+    update_event: UpdateEntityReturnType,
+) -> None:
     logger.info(f"Entity update event {update_event}")  # noqa: G004
 
 
-async def _handle_golem_events() -> None:
-    global client  # noqa: PLW0602
-
+async def _handle_golem_events(client: GolemBaseClient) -> None:
     try:
         # Register golem events to listen for
         logger.info(
@@ -116,8 +117,8 @@ async def _handle_golem_events() -> None:
         )
         await client.watch_logs(
             label="chat_client",
-            create_callback=lambda create: _entity_creation_handler(create),
-            update_callback=lambda update: _entity_update_handler(update),
+            create_callback=lambda create: _entity_creation_handler(client, create),
+            update_callback=lambda update: _entity_update_handler(client, update),
         )
         logger.info("Golem Base event listener started")
 
@@ -132,14 +133,14 @@ async def _handle_golem_events() -> None:
         try:
             await client.disconnect()
             logger.info("Disconnected from client")
-        except Exception as e:  # noqa: BLE001
-            # Don't treat disconnection errors as fatal during shutdown
-            # Common errors: ProviderConnectionError, ConnectionError, OSError
-            logger.warning("Error during disconnection (normal during shutdown): %s", e)
+
+        except ConnectionClosedOK:
+            print("Client shutdown")
+        except Exception:
+            logger.exception("Unexpected error during disconnection")
 
 
-async def _send_message(message: str) -> None:
-    global client  # noqa: PLW0602
+async def _send_message(client: GolemBaseClient, message: str) -> None:
     await client.create_entities(
         [
             GolemBaseCreate(
@@ -152,18 +153,14 @@ async def _send_message(message: str) -> None:
     )
 
 
-def _handle_user_input(loop: asyncio.AbstractEventLoop) -> None:
-    print(f"Type messages, type '{QUIT}' or press Ctrl+C to exit.")
+def _handle_user_input(client: GolemBaseClient) -> None:
+    print("Type messages, press Ctrl+C to exit")
     while True:
         try:
-            # Get next message from user
+            # Get and send next message from user
             message = input().strip()
-            if message == QUIT:
-                break
-
-            # Send the message if it's not empty
             if len(message) > 0:
-                asyncio.run_coroutine_threadsafe(_send_message(message), loop)
+                run_sync(_send_message(client, message))
 
         except (EOFError, KeyboardInterrupt):
             break
@@ -171,15 +168,13 @@ def _handle_user_input(loop: asyncio.AbstractEventLoop) -> None:
 
 async def _run_chat_client(instance: str, wallet_file: str) -> None:
     # Create and connect client to Golem Base
-    global client  # noqa: PLW0603
     client = await create_golem_client(instance, wallet_file)
 
     # Start the user input loop in a separate thread
-    loop = asyncio.get_running_loop()
-    threading.Thread(target=_handle_user_input, args=(loop,), daemon=True).start()
+    threading.Thread(target=_handle_user_input, args=(client,), daemon=True).start()
 
     # Run message handling until interrupted
-    await _handle_golem_events()
+    await _handle_golem_events(client)
 
 
 def main() -> None:
@@ -194,8 +189,8 @@ def main() -> None:
     parser.add_argument(
         "--logging",
         choices=LOG_LEVELS.keys(),
-        default=DEFAULT_LOG_LEVEL,
-        help=f"Log level (default: {DEFAULT_LOG_LEVEL})",
+        default=LOG_LEVEL,
+        help=f"Log level (default: {LOG_LEVEL})",
     )
     parser.add_argument(
         "wallet",
@@ -206,6 +201,7 @@ def main() -> None:
 
     try:
         asyncio.run(_run_chat_client(args.instance, args.wallet))
+
     except KeyboardInterrupt:
         logger.info("Event listener stopped by user")
     except Exception:
