@@ -138,5 +138,5 @@ uv run pytest -v
 
 To run a specific test and also show the logs from the test
 ```bash
-uv run pytest tests/test_client_connection.py --log-cli-level=INFO
+uv run pytest tests/test_entity_creation.py --log-cli-level=INFO
 ```

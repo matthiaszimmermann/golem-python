@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from eth_account import Account
-from golem_base_sdk import GolemBaseClient
+from golem_base_sdk import EntityKey, EntityMetadata, GenericBytes, GolemBaseClient
+from web3 import Web3
 
 from config import ERR_CLIENT_CONNECT, ERR_WALLET_PASSWORD, INSTANCE_URLS, LOG_LEVELS
 from exceptions import WalletDecryptionError
@@ -120,6 +121,22 @@ async def create_golem_client(instance: str, wallet_file: str) -> GolemBaseClien
     return client
 
 
+def get_annotations(metadata: EntityMetadata) -> dict[str, str | int]:
+    """Extract annotations as dict from entity metadata."""
+    if not metadata:
+        return {}
+
+    annotations = {}
+
+    if metadata.string_annotations:
+        annotations |= {a.key: a.value for a in metadata.string_annotations}
+
+    if metadata.numeric_annotations:
+        annotations |= {a.key: a.value for a in metadata.numeric_annotations}
+
+    return annotations
+
+
 def setup_logging(log_level: str) -> None:
     """Configure logging for the specified log level.
 
@@ -151,7 +168,54 @@ def setup_logging(log_level: str) -> None:
     )
 
 
-def get_short_address(address: str) -> str:
+def get_username(wallet_file: str) -> str | None:
+    """Get the username from the wallet file name: wallet_<username>.json."""
+    # Strip leading directories
+    filename = Path(wallet_file).name
+    if filename.startswith("wallet_") and filename.endswith(".json"):
+        return filename[len("wallet_") : -len(".json")]
+
+    return None
+
+
+def get_entity_key(entity_key: object) -> EntityKey:
+    """Get the entity key as an EntityKey object."""
+    if isinstance(entity_key, str):
+        return EntityKey(GenericBytes.from_hex_string(entity_key))
+
+    if isinstance(entity_key, GenericBytes):
+        return EntityKey(entity_key)
+
+    logger.warning(
+        "Invalid entity key type %s. Returning empty EntityKey",
+        type(entity_key).__name__,
+    )
+    return EntityKey(GenericBytes(b""))
+
+
+def get_address(address: object) -> str:
+    """Get a checksummed address."""
+    if isinstance(address, GenericBytes):
+        return address.as_address()
+
+    if isinstance(address, str):
+        return Web3.to_checksum_address(address)
+
+    logger.warning(
+        "Invalid address type %s. Returning empty string", type(address).__name__
+    )
+    return ""
+
+
+def get_user_string(sender_address: str, username: str | None) -> str:
+    """Return a user string for CLI usage."""
+    if not username or len(username) == 0:
+        return get_short_address(sender_address)
+
+    return f"[{username} {get_short_address(sender_address)}]"
+
+
+def get_short_address(address: object) -> str:
     """Get a shortened version of the address.
 
     Args:
@@ -161,4 +225,8 @@ def get_short_address(address: str) -> str:
         Shortened address in format 0x1234...abcd
 
     """
+    address = get_address(address)
+    if address is None:
+        return "Invalid address"
+
     return address[:6] + "..." + address[-4:]
