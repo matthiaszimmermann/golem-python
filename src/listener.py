@@ -9,9 +9,9 @@ from golem_base_sdk import GolemBaseClient
 
 from config import (
     DEFAULT_INSTANCE,
+    DEFAULT_LOG_LEVEL,
     ERR_LISTENER,
     INSTANCE_URLS,
-    LISTENER_LOG_LEVEL,
     LOG_LEVELS,
 )
 from utils import create_golem_client, setup_logging
@@ -96,8 +96,8 @@ def main() -> None:
     parser.add_argument(
         "--logging",
         choices=LOG_LEVELS.keys(),
-        default=LISTENER_LOG_LEVEL,
-        help=f"Log level (default: {LISTENER_LOG_LEVEL})",
+        default=DEFAULT_LOG_LEVEL,
+        help=f"Log level (default: {DEFAULT_LOG_LEVEL})",
     )
     parser.add_argument(
         "wallet",

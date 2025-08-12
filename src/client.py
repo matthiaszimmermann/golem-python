@@ -2,19 +2,10 @@
 
 import argparse
 import asyncio
-import getpass
-import json
 import logging
-import signal
 import sys
 import threading
-from collections.abc import Coroutine
-from concurrent.futures import ThreadPoolExecutor
-from logging.config import dictConfig
-from typing import Any
 
-import anyio
-from eth_account import Account
 from golem_base_sdk import (
     Annotation,
     CreateEntityReturnType,
@@ -23,305 +14,202 @@ from golem_base_sdk import (
     GolemBaseCreate,
 )
 
-# default instanc to run script
-INSTANCE = "local"
+from config import (
+    DEFAULT_INSTANCE,
+    DEFAULT_LOG_LEVEL,
+    ERR_LISTENER,
+    INSTANCE_URLS,
+    LOG_LEVELS,
+)
+from utils import create_golem_client, get_short_address, run_sync, setup_logging
 
-LOG_LEVEL = "INFO"
-
-# Width of the chat window
+# Constants for message loop
+QUIT = "quit"
 CHAT_WIDTH = 80
 
-ERR_CLIENT_CONNECT = 1
-ERR_CLIENT_DISCONNECT = 2
-ERR_LISTENER = 3
+# Entity annotation data
+VERSION = "version"
+VERSION_ANNOTATION = Annotation(VERSION, "1.0")
 
-dictConfig(
-    {
-        "version": 1,
-        "formatters": {
-            "default": {
-                "format": "[%(asctime)s] %(levelname)s in %(module)s: %(message)s",
-            }
-        },
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "formatter": "default",
-                "level": "DEBUG",
-                "stream": "ext://sys.stdout",
-            }
-        },
-        "loggers": {
-            "": {"level": LOG_LEVEL, "handlers": ["console"]},
-        },
-        "disable_existing_loggers": False,
-    }
-)
+COLLECTION = "collection"
+MESSAGES = "message"
+MESSAGE_ANNOTATION = Annotation(COLLECTION, MESSAGES)
+
+
+# Global vars
 logger = logging.getLogger(__name__)
-
-# localhost: when running script directly on local machine
-# host.docker.internal: when running script inside a Docker container
-# eg from a devcontainer setup
-LOCALHOST = "host.docker.internal"
-
-INSTANCE_URLS = {
-    "demo": {
-        "rpc": "https://api.golembase.demo.golem-base.io",
-    },
-    "local": {
-        "rpc": f"http://{LOCALHOST}:8545",
-        "ws": f"ws://{LOCALHOST}:8545",
-    },
-    "kaolin": {
-        "rpc": "https://rpc.kaolin.holesky.golem-base.io",
-        "ws": "wss://ws.rpc.kaolin.holesky.golem-base.io",
-    },
-}
-
-# Global client variable
 client: GolemBaseClient
 
-# Global variable to handle graceful shutdown of process
-shutdown_event = asyncio.Event()
 
-
-# Callback handler for Golem Base events
-def entity_creation_handler(create_event: CreateEntityReturnType) -> None:
-    """Handle entity creation events."""
-    global client  # noqa: PLW0602
-    entity_key = create_event.entity_key
-    metadata: EntityMetadata = _run_sync(client.get_entity_metadata(entity_key))
-
-    # Only react to messages from other clients (= entities we don't own)
-    message_address = metadata.owner.as_hex_string()
-    client_address = client.get_account_address().lower()
-    if message_address != client_address:
-        payload: bytes = _run_sync(client.get_storage_value(entity_key))
-        print_incoming_message(payload)
-
-
-def print_incoming_message(payload: bytes) -> None:
+def _print_incoming_message(payload: bytes, message_address: str) -> None:
     """Print the message at the end of a 80 chars line."""
+    message = payload.decode("utf-8").strip()
+    if len(message) == 0:
+        return
+
+    sender = get_short_address(message_address)
+    message = f"{message} [{sender}]"
+
     # Truncate message if it's too long
-    message = payload.decode("utf-8")
     if len(message) > CHAT_WIDTH:
         message = message[:CHAT_WIDTH]
+
     # Pad with spaces to right-align within 80 chars
-    padded_message = message.rjust(CHAT_WIDTH)
-    print(padded_message)
+    print(message.rjust(CHAT_WIDTH))
 
 
-def entity_update_handler(update_event: object) -> None:  # noqa: D103
+def _get_annotations(metadata: EntityMetadata) -> dict[str, str | int]:
+    if not metadata:
+        return {}
+
+    annotations = {}
+
+    if metadata.string_annotations:
+        annotations |= {a.key: a.value for a in metadata.string_annotations}
+
+    if metadata.numeric_annotations:
+        annotations |= {a.key: a.value for a in metadata.numeric_annotations}
+
+    return annotations
+
+
+# Event handler functions for Golem Base events
+def _entity_creation_handler(create_event: CreateEntityReturnType) -> None:
+    """Print message from other client."""
+    global client  # noqa: PLW0602
+
+    entity_key = create_event.entity_key
+    metadata: EntityMetadata = run_sync(client.get_entity_metadata(entity_key))
+    annotations = _get_annotations(metadata)
+
+    # Missing annotation
+    if COLLECTION not in annotations:
+        return
+
+    # Wrong collection
+    if annotations[COLLECTION] != MESSAGES:
+        return
+
+    # Sender is this client
+    message_address = metadata.owner.as_hex_string()
+    client_address = client.get_account_address().lower()
+    if message_address == client_address:
+        return
+
+    # message from some other client
+    payload: bytes = run_sync(client.get_storage_value(entity_key))
+    _print_incoming_message(payload, message_address)
+
+
+def _entity_update_handler(update_event: object) -> None:
     logger.info(f"Entity update event {update_event}")  # noqa: G004
 
 
-def entity_deletion_handler(delete_event: object) -> None:  # noqa: D103
-    logger.info(f"Entity deletion event {delete_event}")  # noqa: G004
-
-
-def entity_extension_handler(extension_event: object) -> None:  # noqa: D103
-    logger.info(f"Entity extension event {extension_event}")  # noqa: G004
-
-
-# Signal handler for graceful shutdown
-def signal_handler(signum: int, _: object) -> None:
-    """Handle shutdown signals gracefully."""
-    logger.info("Received signal %s, shutting down...", signum)
-    shutdown_event.set()
-
-
-async def run_interactive_client(instance: str, wallet_file: str) -> None:
-    """Run client with event listening and interactive entity creation."""
+async def _handle_golem_events() -> None:
     global client  # noqa: PLW0602
 
     try:
-        # Create client and start event listening in background
-        await _create_client(instance, wallet_file)
+        # Register golem events to listen for
+        logger.info(
+            "Monitoring create and update events at %s",
+            client.golem_base_contract.address,
+        )
+        await client.watch_logs(
+            label="chat_client",
+            create_callback=lambda create: _entity_creation_handler(create),
+            update_callback=lambda update: _entity_update_handler(update),
+        )
+        logger.info("Golem Base event listener started")
 
-        # Start event listening as a background task
-        event_task = asyncio.create_task(_setup_event_watching(client))
+        # Keep the listener running indefinitely
+        await asyncio.Event().wait()
 
-        logger.info("Event listener started in background")
-        logger.info("You can now type messages to create entities")
-        logger.info("Type 'quit' or press Ctrl+C to exit")
-
-        # Run interactive loop in a separate thread to not block the event loop
-        def interactive_loop() -> None:
-            while not shutdown_event.is_set():
-                try:
-                    message = input("")
-
-                    if message.lower() in ["quit"]:
-                        logger.info("User requested exit")
-                        shutdown_event.set()
-                        break
-
-                    if message.strip():
-                        # Create entity with the user's message
-                        create_obj = GolemBaseCreate(
-                            message.encode("utf-8"),
-                            60,  # TTL in blocks
-                            [Annotation("app", "interactive_client")],
-                            [],
-                        )
-
-                        # Schedule the entity creation on the event loop
-                        _run_sync(client.create_entities([create_obj]))
-
-                except EOFError:
-                    logger.info("EOF received, stopping interactive mode")
-                    shutdown_event.set()
-                    break
-                except Exception:
-                    logger.exception("Error creating entity")
-
-        # Run the interactive loop in a thread
-        input_thread = threading.Thread(target=interactive_loop, daemon=True)
-        input_thread.start()
-
-        # Wait for shutdown event
-        await shutdown_event.wait()
-
-        # Cancel the event task
-        event_task.cancel()
-        try:
-            await event_task
-        except asyncio.CancelledError:
-            pass
-
+    except asyncio.CancelledError:
+        logger.info("Golem Base event listening stopped gracefully")
     except Exception:
-        logger.exception("Failed to run interactive client")
+        logger.exception("Failed to start Golem Base event listener")
     finally:
-        if client:
-            try:
-                await client.disconnect()
-                logger.info("Client disconnected")
-            except Exception:
-                logger.exception("Error disconnecting client")
+        try:
+            await client.disconnect()
+            logger.info("Disconnected from client")
+        except Exception as e:  # noqa: BLE001
+            # Don't treat disconnection errors as fatal during shutdown
+            # Common errors: ProviderConnectionError, ConnectionError, OSError
+            logger.warning("Error during disconnection (normal during shutdown): %s", e)
 
 
-async def listen_to_contract_events(instance: str, wallet_file: str) -> None:
-    """Shared method to listen to contract events."""
+async def _send_message(message: str) -> None:
     global client  # noqa: PLW0602
-    try:
-        # Create client and start listening
-        await _create_client(instance, wallet_file)
-        await _setup_event_watching(client)
-        logger.info("Event listener started. Press Ctrl+C to stop...")
+    await client.create_entities(
+        [
+            GolemBaseCreate(
+                message.encode("utf-8"),
+                60,  # TTL in blocks
+                [MESSAGE_ANNOTATION, VERSION_ANNOTATION],
+                [],
+            )
+        ]
+    )
 
-        # Keep the listener running
+
+def _handle_user_input(loop: asyncio.AbstractEventLoop) -> None:
+    print(f"Type messages, type '{QUIT}' or press Ctrl+C to exit.")
+    while True:
         try:
-            await shutdown_event.wait()
-        except asyncio.CancelledError:
-            logger.info("Event listening cancelled")
+            # Get next message from user
+            message = input().strip()
+            if message == QUIT:
+                break
 
-    except Exception:
-        logger.exception("Failed to start event listener")
-    finally:
-        if client:
-            try:
-                await client.disconnect()
-                logger.info("Disconnected from client")
-            except Exception:
-                logger.exception("Disconnecting failed")
-                sys.exit(ERR_CLIENT_DISCONNECT)
+            # Send the message if it's not empty
+            if len(message) > 0:
+                asyncio.run_coroutine_threadsafe(_send_message(message), loop)
+
+        except (EOFError, KeyboardInterrupt):
+            break
 
 
-async def _create_client(instance: str, wallet_file: str) -> GolemBaseClient:
+async def _run_chat_client(instance: str, wallet_file: str) -> None:
+    # Create and connect client to Golem Base
     global client  # noqa: PLW0603
+    client = await create_golem_client(instance, wallet_file)
 
-    # Load wallet from JSON file
-    async with await anyio.open_file(wallet_file, "r") as f:
-        wallet_json = json.loads(await f.read())
+    # Start the user input loop in a separate thread
+    loop = asyncio.get_running_loop()
+    threading.Thread(target=_handle_user_input, args=(loop,), daemon=True).start()
 
-    # Get password for wallet decryption
-    password = getpass.getpass(f"Enter password for wallet {wallet_file}: ")
-
-    # Decrypt the wallet to get the private key
-    try:
-        key_bytes = Account.decrypt(wallet_json, password)
-    except Exception:
-        logger.exception("Failed to decrypt wallet")
-        raise
-
-    # Create client
-    client = await GolemBaseClient.create(
-        rpc_url=INSTANCE_URLS[instance]["rpc"],
-        ws_url=INSTANCE_URLS[instance]["ws"],
-        private_key=key_bytes,
-    )
-
-    if not await client.is_connected():
-        logger.error("Could not connect to the network")
-        sys.exit(ERR_CLIENT_CONNECT)
-
-    logger.info("Connected to %s network", instance)
-    logger.info("Monitoring GolemBase contract events")
-    logger.info("GolemBase contract address: %s", client.golem_base_contract.address)
-
-    return client
-
-
-async def _setup_event_watching(client: GolemBaseClient) -> None:
-    """Set up event watching with callbacks for all event types."""
-    await client.watch_logs(
-        label="entity_creation_listener",
-        create_callback=lambda create: entity_creation_handler(create),
-        # update_callback=lambda update: entity_update_handler(update),
-        # delete_callback=lambda delete: entity_deletion_handler(delete),
-        # extend_callback=lambda extend: entity_extension_handler(extend),
-    )
-
-
-def _run_sync(routine: Coroutine[Any, Any, Any]) -> Any:  # noqa: ANN202, ANN401, RUF100
-    try:
-        # Check if there's a running event loop
-        asyncio.get_running_loop()
-    except RuntimeError:
-        # No current event loop
-        return asyncio.run(routine)
-    else:
-        # Existing event loop: Run in a new thread
-        def run_in_new_loop() -> Any:  # noqa: ANN202, ANN401, RUF100
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            try:
-                return new_loop.run_until_complete(routine)
-            finally:
-                new_loop.close()
-
-        with ThreadPoolExecutor() as pool:
-            future = pool.submit(run_in_new_loop)
-            return future.result()
+    # Run message handling until interrupted
+    await _handle_golem_events()
 
 
 def main() -> None:
-    """Run the interactive client with event listening."""
-    parser = argparse.ArgumentParser(description="Interactive Contract Event Listener")
+    """Run the event listener."""
+    parser = argparse.ArgumentParser(description="Contract Event Listener")
+    parser.add_argument(
+        "--instance",
+        choices=INSTANCE_URLS.keys(),
+        default=DEFAULT_INSTANCE,
+        help="Which instance to connect to (default: local)",
+    )
+    parser.add_argument(
+        "--logging",
+        choices=LOG_LEVELS.keys(),
+        default=DEFAULT_LOG_LEVEL,
+        help=f"Log level (default: {DEFAULT_LOG_LEVEL})",
+    )
     parser.add_argument(
         "wallet",
         help="JSON wallet filename (required)",
     )
-    parser.add_argument(
-        "--instance",
-        choices=INSTANCE_URLS.keys(),
-        default=INSTANCE,
-        help=f"Which instance to connect to (default: {INSTANCE})",
-    )
     args = parser.parse_args()
-
-    # Set up signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    logger.info("Starting interactive client with event listening")
+    setup_logging(args.logging)
 
     try:
-        asyncio.run(run_interactive_client(args.instance, args.wallet))
+        asyncio.run(_run_chat_client(args.instance, args.wallet))
     except KeyboardInterrupt:
-        logger.info("Interactive client stopped by user")
+        logger.info("Event listener stopped by user")
     except Exception:
-        logger.exception("Interactive client failed")
+        logger.exception("Event listener failed")
         sys.exit(ERR_LISTENER)
 
 

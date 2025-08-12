@@ -20,8 +20,6 @@ INSTANCE_URLS = {
 # Default Configuration
 DEFAULT_INSTANCE = "local"
 DEFAULT_LOG_LEVEL = "info"
-LISTENER_LOG_LEVEL = "info"
-CLIENT_LOG_LEVEL = "warn"
 
 # Logging Configuration
 LOG_LEVELS = {"info": "INFO", "warn": "WARNING", "error": "ERROR"}

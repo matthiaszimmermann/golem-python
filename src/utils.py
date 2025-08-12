@@ -1,11 +1,15 @@
 """Shared utilities for the Golem Python client."""
 
+import asyncio
 import getpass
 import json
 import logging
 import sys
+from collections.abc import Coroutine
+from concurrent.futures import ThreadPoolExecutor
 from logging.config import dictConfig
 from pathlib import Path
+from typing import Any
 
 from eth_account import Account
 from golem_base_sdk import GolemBaseClient
@@ -14,6 +18,29 @@ from config import ERR_CLIENT_CONNECT, ERR_WALLET_PASSWORD, INSTANCE_URLS, LOG_L
 from exceptions import WalletDecryptionError
 
 logger = logging.getLogger(__name__)
+
+
+def run_sync(routine: Coroutine[Any, Any, Any]) -> Any:  # noqa: ANN401
+    """Run async routine in a synchronous context."""
+    try:
+        # Check if there's a running event loop
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # No current event loop
+        return asyncio.run(routine)
+    else:
+        # Existing event loop: Run in a new thread
+        def run_in_new_loop() -> Any:  # noqa: ANN202, ANN401, RUF100
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                return new_loop.run_until_complete(routine)
+            finally:
+                new_loop.close()
+
+        with ThreadPoolExecutor() as pool:
+            future = pool.submit(run_in_new_loop)
+            return future.result()
 
 
 def get_wallet_private_key(wallet_file: str) -> bytes:
