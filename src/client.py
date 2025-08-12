@@ -1,4 +1,4 @@
-"""Simple script to listen to all events from a specific contract."""
+"""Simple chat client CLI using Golem Base SDK."""
 
 import argparse
 import asyncio

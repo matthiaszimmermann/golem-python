@@ -100,16 +100,22 @@ async def create_golem_client(instance: str, wallet_file: str) -> GolemBaseClien
 
     """
     try:
-        key_bytes = get_wallet_private_key(wallet_file)
+        key = get_wallet_private_key(wallet_file)
     except (WalletDecryptionError, RuntimeError):
         # Both wallet decryption and file not found errors should exit cleanly
         sys.exit(ERR_WALLET_PASSWORD)
 
     # Create client
+    rpc_url = INSTANCE_URLS[instance]["rpc"]
+    ws_url = INSTANCE_URLS[instance]["ws"]
+    logger.info(
+        f"Creating GolemBaseClient for {instance}. rpc: {rpc_url}, ws: {ws_url}"  # noqa: G004
+    )
+
     client = await GolemBaseClient.create(
-        rpc_url=INSTANCE_URLS[instance]["rpc"],
-        ws_url=INSTANCE_URLS[instance]["ws"],
-        private_key=key_bytes,
+        rpc_url=rpc_url,
+        ws_url=ws_url,
+        private_key=key,
     )
 
     # Wait for client to connect

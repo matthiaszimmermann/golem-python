@@ -12,8 +12,8 @@ INSTANCE_URLS = {
         "ws": f"ws://{LOCALHOST}:8545",
     },
     "kaolin": {
-        "rpc": "https://rpc.kaolin.holesky.golem-base.io",
-        "ws": "wss://ws.rpc.kaolin.holesky.golem-base.io",
+        "rpc": "https://kaolin.holesky.golem-base.io/rpc",
+        "ws": "wss://kaolin.holesky.golem-base.io/rpc/ws",
     },
 }
 
