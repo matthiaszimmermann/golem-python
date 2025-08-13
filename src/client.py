@@ -20,10 +20,10 @@ from golem_base_sdk import (
 from websockets import ConnectionClosedOK
 
 from config import (
-    DEFAULT_INSTANCE,
+    DEFAULT_NETWORK,
     ERR_LISTENER,
-    INSTANCE_URLS,
     LOG_LEVELS,
+    NETWORK_URLS,
 )
 from utils import (
     create_golem_client,
@@ -110,6 +110,8 @@ def _entity_creation_handler(
     client: GolemBaseClient, create_event: CreateEntityReturnType
 ) -> None:
     """Print message entities from other clients."""
+    logger.info(f"Creation event received: {create_event}")  # noqa: G004
+
     entity_key = create_event.entity_key
     metadata: EntityMetadata = run_sync(client.get_entity_metadata(entity_key))
     annotations = get_annotations(metadata)
@@ -137,7 +139,7 @@ def _entity_update_handler(
     client: GolemBaseClient,  # noqa: ARG001
     update_event: UpdateEntityReturnType,
 ) -> None:
-    logger.info(f"Entity update event {update_event}")  # noqa: G004
+    logger.info(f"Update event received: {update_event}")  # noqa: G004
 
 
 async def _handle_golem_events(client: GolemBaseClient) -> None:
@@ -190,7 +192,7 @@ def _handle_user_input(client: GolemBaseClient) -> None:
     user_address = get_address(client.get_account_address())
     user_string = get_user_string(user_address, usernames[user_address])
 
-    print(f"You are logged in as: {user_string}")
+    print(f"Your identity is: {user_string}")
     print("Type messages, press Ctrl+C to exit")
     while True:
         try:
@@ -263,9 +265,10 @@ async def _set_update_username(client: GolemBaseClient, wallet_file: str) -> Non
         )
 
 
-async def _run_chat_client(instance: str, wallet_file: str) -> None:
+async def _run_chat_client(network: str, wallet_file: str) -> None:
     # Create and connect client to Golem Base
-    client = await create_golem_client(instance, wallet_file)
+    client = await create_golem_client(network, wallet_file)
+    print(f"Connected to network '{network}'")
 
     # Update user name record
     await _set_update_username(client, wallet_file)
@@ -281,10 +284,10 @@ def main() -> None:
     """Run the event listener."""
     parser = argparse.ArgumentParser(description="Contract Event Listener")
     parser.add_argument(
-        "--instance",
-        choices=INSTANCE_URLS.keys(),
-        default=DEFAULT_INSTANCE,
-        help="Which instance to connect to (default: local)",
+        "--network",
+        choices=NETWORK_URLS.keys(),
+        default=DEFAULT_NETWORK,
+        help="Which network to connect to (default: local)",
     )
     parser.add_argument(
         "--logging",
@@ -300,7 +303,7 @@ def main() -> None:
     setup_logging(args.logging)
 
     try:
-        asyncio.run(_run_chat_client(args.instance, args.wallet))
+        asyncio.run(_run_chat_client(args.network, args.wallet))
 
     except KeyboardInterrupt:
         logger.info("Event listener stopped by user")

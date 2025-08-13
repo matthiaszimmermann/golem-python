@@ -3,7 +3,7 @@
 # Network Configuration
 LOCALHOST = "host.docker.internal"
 
-INSTANCE_URLS = {
+NETWORK_URLS = {
     "demo": {
         "rpc": "https://api.golembase.demo.golem-base.io",
     },
@@ -18,7 +18,7 @@ INSTANCE_URLS = {
 }
 
 # Default Configuration
-DEFAULT_INSTANCE = "local"
+DEFAULT_NETWORK = "local"
 DEFAULT_LOG_LEVEL = "info"
 
 # Logging Configuration

@@ -8,11 +8,11 @@ import sys
 from golem_base_sdk import GolemBaseClient
 
 from config import (
-    DEFAULT_INSTANCE,
     DEFAULT_LOG_LEVEL,
+    DEFAULT_NETWORK,
     ERR_LISTENER,
-    INSTANCE_URLS,
     LOG_LEVELS,
+    NETWORK_URLS,
 )
 from utils import create_golem_client, setup_logging
 
@@ -89,8 +89,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Contract Event Listener")
     parser.add_argument(
         "--instance",
-        choices=INSTANCE_URLS.keys(),
-        default=DEFAULT_INSTANCE,
+        choices=NETWORK_URLS.keys(),
+        default=DEFAULT_NETWORK,
         help="Which instance to connect to (default: local)",
     )
     parser.add_argument(

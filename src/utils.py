@@ -15,7 +15,7 @@ from eth_account import Account
 from golem_base_sdk import EntityKey, EntityMetadata, GenericBytes, GolemBaseClient
 from web3 import Web3
 
-from config import ERR_CLIENT_CONNECT, ERR_WALLET_PASSWORD, INSTANCE_URLS, LOG_LEVELS
+from config import ERR_CLIENT_CONNECT, ERR_WALLET_PASSWORD, LOG_LEVELS, NETWORK_URLS
 from exceptions import WalletDecryptionError
 
 logger = logging.getLogger(__name__)
@@ -85,11 +85,11 @@ def get_wallet_private_key(wallet_file: str) -> bytes:
         raise WalletDecryptionError(error_msg) from None
 
 
-async def create_golem_client(instance: str, wallet_file: str) -> GolemBaseClient:
+async def create_golem_client(network: str, wallet_file: str) -> GolemBaseClient:
     """Create a GolemBase client for the specified instance and wallet.
 
     Args:
-        instance: Network instance name (local, demo, kaolin)
+        network: Network name (local, demo, kaolin)
         wallet_file: Path to the JSON wallet file
 
     Returns:
@@ -106,16 +106,14 @@ async def create_golem_client(instance: str, wallet_file: str) -> GolemBaseClien
         sys.exit(ERR_WALLET_PASSWORD)
 
     # Create client
-    rpc_url = INSTANCE_URLS[instance]["rpc"]
-    ws_url = INSTANCE_URLS[instance]["ws"]
+    rpc_url = NETWORK_URLS[network]["rpc"]
+    ws_url = NETWORK_URLS[network]["ws"]
     logger.info(
-        f"Creating GolemBaseClient for {instance}. rpc: {rpc_url}, ws: {ws_url}"  # noqa: G004
+        f"Creating GolemBaseClient for {network}. rpc: {rpc_url}, ws: {ws_url}"  # noqa: G004
     )
 
     client = await GolemBaseClient.create(
-        rpc_url=rpc_url,
-        ws_url=ws_url,
-        private_key=key,
+        rpc_url=rpc_url, ws_url=ws_url, private_key=key
     )
 
     # Wait for client to connect
@@ -123,7 +121,7 @@ async def create_golem_client(instance: str, wallet_file: str) -> GolemBaseClien
         logger.error("Could not connect to the network")
         sys.exit(ERR_CLIENT_CONNECT)
 
-    logger.info("Connected to %s network", instance)
+    logger.info("Connected to %s network", network)
     return client
 
 
