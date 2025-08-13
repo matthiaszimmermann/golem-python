@@ -124,6 +124,20 @@ uv pip install -e .
 uv run -m main --instance local
 ```
 
+## Run the Chat 'client'
+
+```bash
+uv run -m client --help
+uv run -m client <wallet-file>
+```
+
+## Prepare for Runing Tests
+
+Create two funded test accounts and store the corresponding private keys in the following two files.
+
+- `test1_private.key`
+- `test2_private.key`
+
 ## Run the Tests
 
 To run tests and only show summaries

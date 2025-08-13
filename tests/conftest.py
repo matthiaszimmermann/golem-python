@@ -7,9 +7,10 @@ import anyio
 import pytest
 from golem_base_sdk import GolemBaseClient
 
-# test account key file
-# TODO move to wallet file (needs updated golem base cli client)
-ACCOUNT_KEY_FILE = "./private.key"
+# test account key files
+# TODO move to wallet file (depends on updated golem base cli client)
+ACCOUNT_KEY_FILE = "./test1_private.key"
+ACCOUNT_KEY_FILE2 = "./test2_private.key"
 
 # define log level for tests
 LOG_LEVEL = logging.DEBUG
@@ -59,9 +60,15 @@ async def client() -> GolemBaseClient:
     return await get_client()
 
 
-async def get_client() -> GolemBaseClient:
+@pytest.fixture(scope="session")
+async def client2() -> GolemBaseClient:
+    """Fixture to provide a second GolemBaseClient instance for tests."""
+    return await get_client(key_file=ACCOUNT_KEY_FILE2)
+
+
+async def get_client(key_file: str = ACCOUNT_KEY_FILE) -> GolemBaseClient:
     """Create a GolemBaseClient instance."""
-    private_key = await _get_private_key()
+    private_key = await _get_private_key(key_file)
     return await GolemBaseClient.create(
         rpc_url=INSTANCE_URLS[INSTANCE]["rpc"],
         ws_url=INSTANCE_URLS[INSTANCE]["ws"],
@@ -69,9 +76,9 @@ async def get_client() -> GolemBaseClient:
     )
 
 
-async def _get_private_key() -> bytes:
+async def _get_private_key(key_file: str) -> bytes:
     async with await anyio.open_file(
-        ACCOUNT_KEY_FILE,
+        key_file,
         "rb",
     ) as f:
         return await f.read(32)

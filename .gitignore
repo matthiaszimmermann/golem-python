@@ -1,5 +1,4 @@
 # Project-specific
-private.key
 wallet*.json
 *.key
 *.tmp
