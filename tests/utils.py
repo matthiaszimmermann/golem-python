@@ -7,8 +7,10 @@ from collections.abc import Sequence
 from golem_base_sdk import (
     Annotation,
     CreateEntityReturnType,
+    EntityKey,
     GolemBaseClient,
     GolemBaseCreate,
+    GolemBaseUpdate,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,6 +47,29 @@ def to_create_entity(
     int_annotations = {k: v for k, v in annotations.items() if isinstance(v, int)}
 
     return GolemBaseCreate(
+        payload,
+        btl,
+        to_annotations_str(str_annotations),
+        to_annotations_int(int_annotations),
+    )
+
+
+def to_update_entity(
+    entity_key: EntityKey,
+    payload: bytes,
+    btl: int = 60,
+    annotations: dict[str, str | int] | None = None,
+) -> GolemBaseUpdate:
+    """Create a GolemBaseUpdate instance with given payload and annotations."""
+    if annotations is None:
+        annotations = {}
+
+    # Split merged_annotations into str and int mappings
+    str_annotations = {k: v for k, v in annotations.items() if isinstance(v, str)}
+    int_annotations = {k: v for k, v in annotations.items() if isinstance(v, int)}
+
+    return GolemBaseUpdate(
+        entity_key,
         payload,
         btl,
         to_annotations_str(str_annotations),

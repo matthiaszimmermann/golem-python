@@ -4,9 +4,6 @@
 LOCALHOST = "host.docker.internal"
 
 NETWORK_URLS = {
-    "demo": {
-        "rpc": "https://api.golembase.demo.golem-base.io",
-    },
     "local": {
         "rpc": f"http://{LOCALHOST}:8545",
         "ws": f"ws://{LOCALHOST}:8545",

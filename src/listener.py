@@ -88,10 +88,10 @@ def main() -> None:
     """Run the event listener."""
     parser = argparse.ArgumentParser(description="Contract Event Listener")
     parser.add_argument(
-        "--instance",
+        "--network",
         choices=NETWORK_URLS.keys(),
         default=DEFAULT_NETWORK,
-        help="Which instance to connect to (default: local)",
+        help="Which network to connect to (default: local)",
     )
     parser.add_argument(
         "--logging",
