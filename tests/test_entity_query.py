@@ -83,6 +83,50 @@ async def test_entity_query_batch(client: GolemBaseClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_entity_query_and_operator_fixme(client: GolemBaseClient) -> None:
+    """Modified test_entity_query_and_operator that always fails."""
+    # Create first batch
+    data_1 = b"1"
+    data_2 = b"2"
+    previous_id = generate_uuid()
+    previous_receipts = await client.create_entities(
+        [
+            to_create_entity(
+                data_1, 60, {"id": previous_id, "color": "red", "size": 10}
+            ),
+            to_create_entity(
+                data_2, 60, {"id": previous_id, "color": "green", "size": 10}
+            ),
+        ]
+    )
+    previous_keys = [
+        receipt.entity_key.as_hex_string() for receipt in previous_receipts
+    ]
+    logger.info(f"Created previous entities with keys: {previous_keys}")  # noqa: G004
+
+    # Create second batch with different ID
+    batch_id = generate_uuid()
+    assert batch_id != previous_id, "Batch ID should be unique"
+
+    create_receipts = await client.create_entities(
+        [
+            to_create_entity(data_1, 60, {"id": batch_id, "color": "red", "size": 10}),
+            to_create_entity(
+                data_2, 60, {"id": batch_id, "color": "green", "size": 10}
+            ),
+        ]
+    )
+    entity_keys = [receipt.entity_key.as_hex_string() for receipt in create_receipts]
+    logger.info(f"Created entities with keys: {entity_keys}")  # noqa: G004
+
+    # Query with two and clause
+    query = f'id = "{batch_id}" {AND} color = "red" {AND} size = 10'
+    logger.info(f"Using query: '{query}'")  # noqa: G004
+    query_result = await client.query_entities(query)
+    _check_result(query_result, entity_keys, [data_1])  # type: ignore  # noqa: PGH003
+
+
+@pytest.mark.asyncio
 async def test_entity_query_and_operator(client: GolemBaseClient) -> None:
     """Create multiple entities and query them with an AND operator."""
     # Create multiple entities

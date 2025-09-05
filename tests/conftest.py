@@ -28,7 +28,7 @@ def pytest_addoption(parser) -> None:  # noqa: ANN001
         "--network",
         action="store",
         default="local",
-        choices=["local", "kaolin"],
+        choices=["local", "kaolin", "warsaw"],
         help="Network to use for tests (default: local)",
     )
 

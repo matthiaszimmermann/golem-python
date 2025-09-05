@@ -45,9 +45,10 @@ async def test_delete_entity(client: GolemBaseClient) -> None:
     )
 
     # Verify entity no longer exists
-    deleted_value = await client.get_storage_value(entity_key)
-    assert deleted_value == b"", (
-        f"Storage value should be b'' after entity deletion but is {deleted_value}"
+    with pytest.raises(Web3RPCError) as exc_info:
+        await client.get_storage_value(entity_key)
+    logger.info(
+        f"Expected exception when accessing deleted entity storage: {exc_info.value}"  # noqa: G004
     )
     logger.info("Storage value for deleted entity checked")
 
@@ -57,7 +58,6 @@ async def test_delete_entity(client: GolemBaseClient) -> None:
     logger.info(
         f"Expected exception when accessing deleted entity metadata: {exc_info.value}"  # noqa: G004
     )
-
     logger.info("Entity deletion test completed successfully")
 
 
@@ -125,9 +125,10 @@ async def test_delete_multiple_entities(client: GolemBaseClient) -> None:
 
     # Verify all entities no longer exist
     for entity_key in entity_keys:
-        deleted_storage_value = await client.get_storage_value(entity_key)
-        assert deleted_storage_value == b"", (
-            f"Storage value should be b'' after deletion for key {entity_key}"
+        with pytest.raises(Web3RPCError) as exc_info:
+            await client.get_storage_value(entity_key)
+        logger.info(
+            f"Expected exception when accessing deleted entity storage: {exc_info.value}"  # noqa: G004
         )
 
     logger.info("Multiple entity deletion test completed successfully")

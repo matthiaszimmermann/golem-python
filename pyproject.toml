@@ -3,16 +3,17 @@ name = "default"
 version = "0.1.0"
 description = "This repository contains configurations to set up a Python development environment using VSCode's Dev Container feature. The environment includes uv and Ruff."
 
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 readme = "README.md"
 license = { file = "LICENSE" }
 
 dependencies = [
     "anyio>=4.10.0",
     "eth-account>=0.13.7",
-    "golem-base-sdk>=0.0.3",
+    "golem-base-sdk==0.1.0",
     "pydantic[email]>=2.10.6,<3.0.0",
     "pytest-asyncio>=1.1.0",
+    "python-dotenv>=1.1.1",
     "pytz>=2024.2,<2025.0",
 ]
 

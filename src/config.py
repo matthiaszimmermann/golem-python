@@ -12,6 +12,10 @@ NETWORK_URLS = {
         "rpc": "https://kaolin.holesky.golem-base.io/rpc",
         "ws": "wss://kaolin.holesky.golem-base.io/rpc/ws",
     },
+    "warsaw": {
+        "rpc": "https://ethwarsaw.holesky.golemdb.io/rpc",
+        "ws": "wss://ethwarsaw.holesky.golemdb.io/rpc/ws",
+    },
 }
 
 # Default Configuration
