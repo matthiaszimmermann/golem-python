@@ -1,14 +1,14 @@
 # Golem DB
 
-## Entities
-
 Golem DB is a flexible, permissioned entity storage and management system designed for decentralized and distributed applications. It provides a robust model for creating, updating, querying, and managing entities, each of which can store binary data, structured annotations, and rich metadata. The system is built to support both simple and advanced use cases, from personal asset management to complex multi-party workflows.
+
+## Entities
 
 Entities in Golem DB are governed by a dual-role model: every entity has an owner and an operator, each with clearly defined permissions. The owner controls transfer and deletion, while the operator manages data, annotations, and entity lifetime. All state changes are cryptographically signed, ensuring strong guarantees of authenticity, integrity, and auditability—both on-chain and off-chain.
 
 The API is designed for clarity, type safety, and extensibility. It supports efficient partial data access, dynamic querying, sorting, and pagination, as well as historical queries by block number. Error handling is explicit and minimal, making it easy to integrate Golem DB into a wide range of applications and services.
 
-## Quick Start
+## Quick Start
 
 The following quick start example demonstrates how easy it is to create, update, fetch, and delete entities using Golem DB. With sensible defaults for all optional fields, you can get up and running with just a few lines of code—perfect for rapid prototyping or exploring the API’s core features.
 
@@ -73,6 +73,39 @@ print('Query results (type="demo"):', [e.metadata.entity_key for e in select_res
 # Query for all entities with annotation type: "test" and group: "A"
 select_result = db.select('type = "test" && group = "A"')
 print('Query results (type="demo" && group = "A"):', [e.metadata.entity_key for e in select_result.entities])
+```
+
+You can easily subscribe to entity lifecycle events using the subscribe method. For example, to listen for entity creation events and print all available information:
+
+```python
+from golemdb import Client, EntityField
+
+# Callback method that is called whenever a new entity is created.
+def handle_created(event: EntityCreated) -> None:
+    print("Entity created:")
+    print(f"  entity_key: {event.entity_key}")
+    print(f"  owner: {event.owner}")
+    print(f"  operator: {event.operator}")
+    print(f"  expires_at: {event.expires_at}")
+    print(f"  version: {event.version}")
+    print(f"  data_hash: {event.data_hash.hex()}")
+    print(f"  annotations_hash: {event.annotations_hash.hex()}")
+
+# Initialize the client (details may vary depending on your setup)
+client = Client(RPC_URL, wallet, password)
+
+# Subscribe to creation events
+handle: SubscriptionHandle = await client.subscribe(
+    label="creation-watcher",
+    on_created=handle_created
+)
+
+# Trigger a entity creation callback
+client.create(data=b"Hello World!")
+
+# ... later, to clean up:
+await handle.unsubscribe()
+await client.disconnect()
 ```
 
 ## Entity Role Model: Owner & Operator
@@ -198,18 +231,18 @@ If any signature fails to verify, or if the entity state does not match the sign
 
 Likely need to consider alternatives as complexity and practicability for verification by smart contracts does not seem practical...
 
-## Client Methods
+## Client API
+
+### Types
 
 ```python
 from typing import NamedTuple, List, Optional, Dict, Union, Any
 from enum import Enum, auto
 
+from eth_typing import ChecksumAddress, HexStr
+
 #--- Types --------------------------------------#
 class EntityKey(str):
-    pass
-    """Valid length and format is required."""
-
-class Address(str):
     pass
     """Valid length and format is required."""
 
@@ -220,13 +253,13 @@ class EntityField(Enum):
 
 class Metadata(NamedTuple):
     entity_key: EntityKey
-    owner: Address
-    operator: Address
+    owner: ChecksumAddress
+    operator: ChecksumAddress
     expires_at: int
     created_at: int
     updated_at: int
-    previous_owner: Address
-    previous_operator: Address
+    previous_owner: ChecksumAddress
+    previous_operator: ChecksumAddress
     owner_version: int
     operator_version: int
     owner_signature: bytes
@@ -262,41 +295,49 @@ class CreateOp(NamedTuple):
     data: Optional[bytes] = None
     annotations: Optional[Annotations] = None
     btl: Optional[int] = None
-    operator: Optional[Address] = None
+    operator: Optional[ChecksumAddress] = None
 
 class UpdateOp(NamedTuple):
     entity_key: EntityKey
     data: Optional[bytes] = None
     annotations: Optional[Annotations] = None
     btl: Optional[int] = None
-    new_operator: Optional[Address] = None
+    new_operator: Optional[ChecksumAddress] = None
 
 class TransferOp(NamedTuple):
     entity_key: EntityKey
-    new_owner: Address
+    new_owner: ChecksumAddress
 
 class DeleteOp(NamedTuple):
     entity_key: EntityKey
 
 class CreateResult(NamedTuple):
+    """
+    Both block_number and tx_hash are included for convenience and consistency.
+    The block number is provided directly to avoid extra lookups, but can always be derived from the transaction hash if needed.
+    """
     entity_key: EntityKey
     success: bool
     block_number: int
+    tx_hash: HexStr
 
 class UpdateResult(NamedTuple):
     entity_key: EntityKey
     success: bool
     block_number: int
+    tx_hash: HexStr
 
 class TransferResult(NamedTuple):
     entity_key: EntityKey
     success: bool
     block_number: int
+    tx_hash: HexStr
 
 class DeleteResult(NamedTuple):
     entity_key: EntityKey
     success: bool
     block_number: int
+    tx_hash: HexStr
 
 class ProcessResult(NamedTuple):
     creates: List[CreateResult]
@@ -324,7 +365,69 @@ class SelectResult(NamedTuple):
     block_number: int
     next_cursor: Optional[Cursor] = None
 
-#--- Error Hanling -------------------------------#
+```
+
+### Event Handling
+
+```python
+
+class EntityCreated(NamedTuple):
+    entity_key: EntityKey
+    owner: ChecksumAddress
+    operator: ChecksumAddress
+    expires_at: int
+    version: int
+    data_hash: HexStr
+    annotations_hash: HexStr
+
+class EntityUpdated(NamedTuple):
+    entity_key: EntityKey
+    operator: ChecksumAddress
+    version: int
+    data_hash: HexStr
+    annotations_hash: HexStr
+
+class EntityDeleted(NamedTuple):
+    entity_key: EntityKey
+    by: ChecksumAddress
+
+class EntityExtended(NamedTuple):
+    entity_key: EntityKey
+    operator: ChecksumAddress
+    old_expires_at: int
+    new_expires_at: int
+
+class EntityExpired(NamedTuple):
+    entity_key: EntityKey
+
+class EntityOwnershipTransferred(NamedTuple):
+    entity_key: EntityKey
+    previous_owner: ChecksumAddress
+    new_owner: ChecksumAddress
+    version: int
+
+class EntityOperatorTransferred(NamedTuple):
+    entity_key: EntityKey
+    previous_operator: ChecksumAddress
+    new_operator: ChecksumAddress
+    version: int
+
+class SubscriptionHandle:
+    def label(self) -> str:
+        """
+        Return the label provided when creating the subscription.
+        """
+
+    async def unsubscribe(self) -> None:
+        """
+        Unsubscribe from the entity events for this subscription.
+        After calling this method, no further event callbacks will be invoked.
+        """
+```
+
+### Client Error Handling
+
+```python
 class EntityError(Exception):
     """Base exception for all entity-related errors."""
 
@@ -337,13 +440,17 @@ class PermissionDeniedError(EntityError):
 class InvalidInputError(EntityError):
     """Raised when input arguments are invalid."""
 
-#--- Methods (Create, Update, Delete) ------------------------------#
+```
+
+### Methods (Create, Update, Delete)
+
+```python
 def create(
     self,
     data: bytes,
     annotations: Optional[Annotations] = None,
     btl: int = 60,
-    operator: Address = None
+    operator: ChecksumAddress = None
 ) -> EntityKey:
     """
     Create a new entity.
@@ -360,7 +467,7 @@ def update(
     data: bytes = None,
     annotations: Optional[Annotations] = None,
     btl: int = None,
-    operator: Address = None
+    operator: ChecksumAddress = None
 ) -> bool:
     """
     Update data, annotations, transfer operator role, or extend the entitys lifetime.
@@ -371,7 +478,7 @@ def update(
     Raises InvalidInputError for invalid arguments.
     """
 
-def transfer(self, entity_key: EntityKey, new_owner: Address) -> bool:
+def transfer(self, entity_key: EntityKey, new_owner: ChecksumAddress) -> bool:
     """
     Transfer ownership role.
     Permissioned. Only allowed for current owner.
@@ -413,7 +520,11 @@ def process(
     Raises EntityNotFoundError or PermissionDeniedError for failed operations.
     """
 
-#--- Methods (Read) --------------------------------------#
+```
+
+### Methods (Read)
+
+```python
 def exists(self, entity_key: EntityKey, block_number: Optional[int] = None) -> ExistsResult:
     """
     Return True if an entity exists for the specified entity key, False otherwise.
@@ -466,12 +577,164 @@ def select(
     Only block_numbers covering the last n minutes are supported.
     Raises InvalidInputError for invalid arguments.
     """
+
 ```
 
-## AI Generated Hypothetical Feedback to Golem DB and its API
+### Methods (Event Subscription)
+
+```python
+async def subscribe(
+    self,
+    *,
+    label: str,
+    on_created: Optional[Callable[[EntityCreated], None]] = None,
+    on_updated: Optional[Callable[[EntityUpdated], None]] = None,
+    on_extended: Optional[Callable[[EntityExtended], None]] = None,
+    on_ownership_transferred: Optional[Callable[[EntityOwnershipTransferred], None]] = None,
+    on_operator_transferred: Optional[Callable[[EntityOperatorTransferred], None]] = None,
+    on_deleted: Optional[Callable[[EntityDeleted], None]] = None,
+    on_expired: Optional[Callable[[EntityExpired], None]] = None,
+) -> SubscriptionHandle:
+    """
+    Subscribe to entity events.
+
+    Register a callback for any combination of:
+      - on_created
+      - on_updated
+      - on_extended
+      - on_ownership_transferred
+      - on_operator_transferred
+      - on_deleted
+      - on_expired
+
+    Each callback receives a strongly-typed event object matching the Solidity event.
+    Returns a SubscriptionHandle for unsubscribing.
+    """
+
+```
+
+### Methods (Web3 Low Level)
+
+```python
+@property
+def http_client(self) -> GolemBaseHttpClient:
+    """Return the HTTP Web3 client."""
+
+@property
+def ws_client(self) -> AsyncWeb3:
+    """Return the HTTP WS client."""
+
+def is_connected(self) -> bool
+    """
+    Returns True if the client is connected with the RPC node, False otherwise.
+    """
+
+def get_account_address(self) -> ChecksumAddress:
+    """
+    Returns the connected account address.
+    """
+
+def get_balance(self) -> int:
+    """
+    Returns the balance of the connected account address.
+    The balance must be positive for state changing methods.
+    """
+
+def reconnect_ws(self) -> bool
+    """
+    Attempt to re-connect a failed WS connection.
+    Returns True if connection is successfully re-created, False otherwise.
+    """
+
+```
+
+## Solidity (Entity related Events)
+
+```solidity
+event EntityCreated(
+    bytes32 indexed entityKey,
+    address indexed operator,
+    address indexed owner,
+    uint256 expiresAt,
+    uint256 version,
+    bytes32 dataHash,         // keccak256 hash of the initial data
+    bytes32 annotationsHash   // keccak256 hash of the initial annotations
+);
+
+event EntityUpdated(
+    bytes32 indexed entityKey,
+    address indexed operator,
+    uint256 version,
+    bytes32 dataHash,         // keccak256 hash of the new data (or zero if unchanged)
+    bytes32 annotationsHash   // keccak256 hash of the new annotations (or zero if unchanged)
+);
+
+event EntityExtended(
+    bytes32 indexed entityKey,
+    address indexed operator,
+    uint256 oldExpiresAt,
+    uint256 newExpiresAt,
+    uint256 version
+);
+
+event EntityOwnershipTransferred(
+    bytes32 indexed entityKey,
+    address indexed previousOwner,
+    address indexed newOwner,
+    uint256 version
+);
+
+event EntityOperatorTransferred(
+    bytes32 indexed entityKey,
+    address indexed previousOperator,
+    address indexed newOperator,
+    uint256 version
+);
+
+event EntityDeleted(
+    bytes32 indexed entityKey,
+    address indexed by,
+    uint256 version
+);
+
+event EntityExpired(
+    bytes32 indexed entityKey,
+    uint256 version
+);
+```
+
+
+## AI Generated Hypothetical Feedback to Golem DB and its API
 
 ### Simplicity-Focused Mid-Senior Web3 Dev
 
+Golem DB’s README is clear, well-structured, and approachable. The quick start examples are practical and easy to follow, showing how to create, update, and query entities with minimal boilerplate. The API feels familiar to anyone who’s used web3.py or similar SDKs, and the type hints and NamedTuple usage make it easy to reason about data structures.
+
+The permission model (owner/operator) is explained up front, and the permission table is a great touch—it’s immediately obvious who can do what. The batch/process API is also a nice feature for efficiency.
+
+The event subscription section is especially strong:
+
+The subscribe method is minimal and explicit, and the callback pattern is easy to use.
+The example for entity creation events is copy-paste ready and shows all the info I’d want.
+The SubscriptionHandle pattern is familiar and makes resource management straightforward.
+The error handling and result types are explicit, so I know what to expect and how to handle edge cases. The offchain verification section is a bit dense, but it’s good to see that auditability is a first-class concern.
+
+**What I like**
+
+Minimal, readable code samples—no magic, no unnecessary abstraction.
+Clear, permissioned model with real-world roles.
+Batch operations and event subscriptions are easy to use.
+Type safety and explicit error handling.
+
+**What I’d want to see improved or clarified**
+
+A short section on how to connect to a testnet or local dev node (e.g., what RPC_URL should look like).
+More real-world examples, e.g., how to use annotations for tagging, or how to handle entity expiry in practice.
+A quick note on gas costs or best practices for minimizing onchain storage (even just a link to a section below).
+Maybe a “common pitfalls” or FAQ section for things like connection loss, permission errors, or large data.
+
+**Summary**
+This is one of the more approachable and production-ready web3 SDKs I’ve seen. The README is focused, practical, and doesn’t overwhelm with jargon or unnecessary complexity. I’d feel comfortable integrating this into a project or hackathon with minimal ramp-up.
 
 ### Seasoned Web3 Dev
 
