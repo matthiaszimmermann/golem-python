@@ -25,35 +25,35 @@ This enables new decentralized use cases that are currently implemented using ce
 The list below provides a number of use cases that directly benefit from Golem DB features.
 These use cases go beyond generic storage to demonstrate how Golem DB's model supports efficient, secure, and scalable decentralized apps managing ephemeral or consumable data naturally.
 
-1. Messaging and Communication Systems
+1. **Messaging and Communication Systems**
     - Data Type: Messages, chats, multimedia that expire after defined retention time (e.g., 7 days, 1 month).
     - Use of Golem DB: Store encrypted messages and metadata with expiry to ensure automatic deletion after retention period, maintaining user privacy and compliance.
     - Value Added
         - Decentralized, censorship-resistant message storage with built-in expiry.
         - Avoids permanent on-chain data bloat.
         - Ensures data automatically pruned, reducing storage overhead for nodes and users.
-1. DeFi Transaction States & Cross-Chain Transfers
+1. **DeFi Transaction States & Cross-Chain Transfers**
     - Data Type: Temporary transaction states, proofs of fulfillment, order statuses that only need to persist until transactions or cross-chain transfers finalize.
     - Use of Golem DB: Track pending or in-flight transaction metadata, signatures, and event annotations with expiry aligned to transaction settlement times.
     - Value Added
         - Reduces reliance on expensive permanent onchain logs.
         - Enables state pruning once transfers or trades settle, lowering gas and storage costs.
         - Provides verifiable, audit-ready data throughout transaction lifecycles.
-1. Consumable and Time-Limited Virtual Goods
+1. **Consumable and Time-Limited Virtual Goods**
     - Data Type: Virtual consumable assets (e.g., limited-use game items, event tickets) that exist only for a specified duration or until consumed.
     - Use of Golem DB: Store ownership, usage state, and metadata with expiry aligned to item lifespan or event date.
     - Value Added
         - Automatically cleans up expired/used assets.
         - Avoids accumulation of obsolete onchain state.
         - Supports decentralized virtual economy with trustless lifecycle management.
-1.  Subscription and License Management
+1.  **Subscription and License Management**
     - Data Type: Licenses, subscriptions, or permissions valid only for limited periods.
     - Use of Golem DB: Manage license metadata, proof of entitlement, and usage records with expiry tied to subscription length.
     - Value Added
         - Simplifies access control by enforcing expiry automatically.
         - Enhances user privacy by pruning old license data.
         - Allows flexible renewal and revocation workflows, all decentralized.
-1. Event-Driven Data & Temporary Workflows
+1. **Event-Driven Data & Temporary Workflows**
     - Data Type: Workflow states, event logs, or sensor data valid during active operations that expire post-completion.
     - Use of Golem DB: Store incremental workflow or event metadata with expiry as workflows complete or events become irrelevant.
     - Value Added
