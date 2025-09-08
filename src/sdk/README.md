@@ -67,15 +67,11 @@ batch_result = client.process(
 print("Created entities:" [res.entity_key for res in batch_result.creates])
 
 # Query for all entities with annotation type: "demo"
-select_result = db.select(
-    query='type = "demo"',
-)
+select_result = db.select('type = "demo"')
 print('Query results (type="demo"):', [e.metadata.entity_key for e in select_result.entities])
 
 # Query for all entities with annotation type: "test" and group: "A"
-select_result = db.select(
-    query='type = "test" && group = "A"',
-)
+select_result = db.select('type = "test" && group = "A"')
 print('Query results (type="demo" && group = "A"):', [e.metadata.entity_key for e in select_result.entities])
 ```
 
