@@ -2,8 +2,82 @@
 
 ## Entities
 
-TODO general overview
+Golem DB is a flexible, permissioned entity storage and management system designed for decentralized and distributed applications. It provides a robust model for creating, updating, querying, and managing entities, each of which can store binary data, structured annotations, and rich metadata. The system is built to support both simple and advanced use cases, from personal asset management to complex multi-party workflows.
 
+Entities in Golem DB are governed by a dual-role model: every entity has an owner and an operator, each with clearly defined permissions. The owner controls transfer and deletion, while the operator manages data, annotations, and entity lifetime. All state changes are cryptographically signed, ensuring strong guarantees of authenticity, integrity, and auditability—both on-chain and off-chain.
+
+The API is designed for clarity, type safety, and extensibility. It supports efficient partial data access, dynamic querying, sorting, and pagination, as well as historical queries by block number. Error handling is explicit and minimal, making it easy to integrate Golem DB into a wide range of applications and services.
+
+## Quick Start
+
+The following quick start example demonstrates how easy it is to create, update, fetch, and delete entities using Golem DB. With sensible defaults for all optional fields, you can get up and running with just a few lines of code—perfect for rapid prototyping or exploring the API’s core features.
+
+```python
+from golemdb import Client, EntityField
+
+# Initialize the client (details may vary depending on your setup)
+client = Client(RPC_URL, wallet, password)
+
+# Create a new entity (only data fields used here)
+result = client.create(data=b"Hello, Golem!")
+print(f"Created entity: {result.entity_key}")
+
+# Fetch the entity metadata only
+result = client.get(
+    entity_key,
+    fields=[EntityField.METADATA]
+)
+print(f"Fetched entity metadata: {result.entity.metadata}")
+
+# Update/amend the entity with optional annotations
+client.update(
+    entity_key=entity_key,
+    annotations={"purpose": "demo", "version": 1}
+)
+
+# Fetch the full entity (default: all fields)
+result = client.get(entity_key)
+print(f"Full entity: {result.entity}")
+
+# Delete the entity
+result = client.delete(entity_key)
+print(f"Entity deleted: {result.entity_key}")
+
+# Check if the entity still exists
+exists_result = client.exists(entity_key)
+print(f"Entity exists after delete: {exists_result.exists}")
+```
+
+The following example demonstrates how to efficiently create multiple entities in a single batch operation using the process method, and then retrieve a filtered subset of those entities with the flexible select query. This approach is ideal for scenarios where you need to onboard or update many records at once and then quickly access only those matching specific criteria.
+
+```python
+from golemdb import Client, EntityField
+
+# Initialize the client (details may vary depending on your setup)
+client = Client(RPC_URL, wallet, password)
+
+# Batch create multiple entities
+batch_result = client.process(
+    creates=[
+        CreateOp(data=b"Alpha", annotations={"type": "demo", "group": "A"}),
+        CreateOp(data=b"Beta", annotations={"type": "demo", "group": "B"}),
+        CreateOp(data=b"Gamma", annotations={"type": "test", "group": "A"}),
+    ]
+)
+print("Created entities:" [res.entity_key for res in batch_result.creates])
+
+# Query for all entities with annotation type: "demo"
+select_result = db.select(
+    query='type = "demo"',
+)
+print('Query results (type="demo"):', [e.metadata.entity_key for e in select_result.entities])
+
+# Query for all entities with annotation type: "test" and group: "A"
+select_result = db.select(
+    query='type = "test" && group = "A"',
+)
+print('Query results (type="demo" && group = "A"):', [e.metadata.entity_key for e in select_result.entities])
+```
 
 ## Entity Role Model: Owner & Operator
 
@@ -134,93 +208,239 @@ Likely need to consider alternatives as complexity and practicability for verifi
 from typing import NamedTuple, List, Optional, Dict, Union, Any
 from enum import Enum, auto
 
-class OrderField(Enum):
-    ASC = auto()
-    DESC = auto()
+#--- Types --------------------------------------#
+class EntityKey(str):
+    pass
+    """Valid length and format is required."""
+
+class Address(str):
+    pass
+    """Valid length and format is required."""
 
 class EntityField(Enum):
     DATA = auto()
     ANNOTATIONS = auto()
     METADATA = auto()
 
+class Metadata(NamedTuple):
+    entity_key: EntityKey
+    owner: Address
+    operator: Address
+    expires_at: int
+    created_at: int
+    updated_at: int
+    previous_owner: Address
+    previous_operator: Address
+    owner_version: int
+    operator_version: int
+    owner_signature: bytes
+    operator_signature: bytes
+
+Annotations = Dict[str, Union[str, int]]
+
 class Entity(NamedTuple):
     data: Optional[bytes] = None
-    annotations: Optional[Dict[str, Union[str, int]]] = None
-    metadata: Optional[Dict[str, Union[EntityKey, Address, int, bytes]] = None
+    annotations: Optional[Annotations] = None
+    metadata: Metadata
+
+class OrderField(Enum):
+    ASC = auto()
+    DESC = auto()
 
 class SortSpec(NamedTuple):
-    field: str,
+    field: str
     order: OrderField
 
-class Address(str):
-    pass
-
 class Cursor(str):
+    """
+    Opaque cursor field to specify the 1st record of the next page to be returned.
+    Defaults to the 1st record of the full entity list.
+    """
     pass
 
 class Pagination(NamedTuple):
     limit: int = 100
-    cursor: Optional[Cursor] = None # str, EntityKey or something else?
+    cursor: Optional[Cursor] = None
+
+class CreateOp(NamedTuple):
+    data: Optional[bytes] = None
+    annotations: Optional[Annotations] = None
+    btl: Optional[int] = None
+    operator: Optional[Address] = None
+
+class UpdateOp(NamedTuple):
+    entity_key: EntityKey
+    data: Optional[bytes] = None
+    annotations: Optional[Annotations] = None
+    btl: Optional[int] = None
+    new_operator: Optional[Address] = None
+
+class TransferOp(NamedTuple):
+    entity_key: EntityKey
+    new_owner: Address
+
+class DeleteOp(NamedTuple):
+    entity_key: EntityKey
+
+class CreateResult(NamedTuple):
+    entity_key: EntityKey
+    success: bool
+    block_number: int
+
+class UpdateResult(NamedTuple):
+    entity_key: EntityKey
+    success: bool
+    block_number: int
+
+class TransferResult(NamedTuple):
+    entity_key: EntityKey
+    success: bool
+    block_number: int
+
+class DeleteResult(NamedTuple):
+    entity_key: EntityKey
+    success: bool
+    block_number: int
+
+class ProcessResult(NamedTuple):
+    creates: List[CreateResult]
+    updates: List[UpdateResult]
+    deletes: List[DeleteResult]
+
+class ExistsResult(NamedTuple):
+    exists: bool
+    block_number: int
 
 class GetResult(NamedTuple):
-    entities: List[Entity]
+    entity: Entity
     block_number: int
-    next_cursor: Optional[Cursor] = None
 
 class CountResult(NamedTuple):
     count: int
     block_number: int
 
+class SelectResult(NamedTuple):
+    """
+    Provides matching results as a sorted list.
+    If not matching entities are found, an empty list is returned.
+    """
+    entities: List[Entity]
+    block_number: int
+    next_cursor: Optional[Cursor] = None
+
+#--- Error Hanling -------------------------------#
+class EntityError(Exception):
+    """Base exception for all entity-related errors."""
+
+class EntityNotFoundError(EntityError):
+    """Raised when an entity does not exist for the given key."""
+
+class PermissionDeniedError(EntityError):
+    """Raised when the caller does not have permission for the operation."""
+
+class InvalidInputError(EntityError):
+    """Raised when input arguments are invalid."""
+
+#--- Methods (Create, Update, Delete) ------------------------------#
 def create(
     self,
     data: bytes,
-    annotations: dict = None,
+    annotations: Optional[Annotations] = None,
     btl: int = 60,
     operator: Address = None
 ) -> EntityKey:
     """
-    Create a new entity. Optionally specify an operator (manager/issuer).
+    Create a new entity.
+    Optionally specify an operator (manager/issuer).
+    Signer gets owner rights.
+    If no operator is specified, signer also gets operator rights.
+    Non-permissioned.
+    Raises InvalidInputError for invalid arguments.
     """
 
 def update(
     self,
     entity_key: EntityKey,
     data: bytes = None,
-    annotations: dict = None,
+    annotations: Optional[Annotations] = None,
     btl: int = None,
-    new_operator: Address = None
+    operator: Address = None
 ) -> bool:
     """
     Update data, annotations, transfer operator role, or extend the entitys lifetime.
     Arguments that are set to None will not lead to any changes.
-    Only allowed for the current operator.
+    Permissioned. Only allowed for current operator.
+    Raises EntityNotFoundError if no such entity exists.
+    Raises PermissionDeniedError if signer is not operator.
+    Raises InvalidInputError for invalid arguments.
     """
 
 def transfer(self, entity_key: EntityKey, new_owner: Address) -> bool:
     """
-    Transfer ownership role. Only allowed for current owner.
+    Transfer ownership role.
+    Permissioned. Only allowed for current owner.
+    Raises EntityNotFoundError if no such entity exists.
+    Raises PermissionDeniedError if signer is not owner.
+    Raises InvalidInputError for invalid arguments.
     """
 
 def delete(self, entity_key: EntityKey) -> bool:
     """
-    Delete the entity. Allowed for owner or operator.
+    Delete the entity.
+    Permissioned. Only allowed for current owner or operator.
+    Raises EntityNotFoundError if no such entity exists.
+    Raises PermissionDeniedError if signer is not owner or operator.
+    Raises InvalidInputError for invalid arguments.
+    """
+
+def process(
+    self,
+    creates: List[CreateOp] = [],
+    updates: List[UpdateOp] = [],
+    transfers: List[TransferOp] = [],
+    deletes: List[DeleteOp] = []
+) -> ProcessResult:
+    """
+    Batch process multiple entity operations (create, update, delete) in a single transaction.
+
+    - `creates`: List of CreateOp objects (same fields as the `create` method).
+    - `updates`: List of UpdateOp objects (same fields as the `update` method).
+    - `transfers`: List of TransferOp objects (same fields as the `transfer` method).
+    - `deletes`: List of DeleteOp objects (entity_key only).
+
+    Each entity key may only be used once over all specified operations.
+    I.e. using an entity key in multiple update operators or using the same entity key in an update and/or a transfer and delete operation is not supported.
+    Returns a ProcessResult containing lists of result objects for each operation type.
+
+    All operations are executed atomically: either all succeed, or none are applied.
+    Raises InvalidInputError for invalid arguments.
+    Raises EntityNotFoundError or PermissionDeniedError for failed operations.
+    """
+
+#--- Methods (Read) --------------------------------------#
+def exists(self, entity_key: EntityKey, block_number: Optional[int] = None) -> ExistsResult:
+    """
+    Return True if an entity exists for the specified entity key, False otherwise.
+    For block number None (default) the latest avaliable block number is used.
+    Only block_numbers covering the last n minutes are supported.
+    Raises InvalidInputError for invalid arguments.
     """
 
 def get(
     self,
-    query: str,
-    fields: Optional[List[EntityField]] = None,
-    sort: Optional[List[SortSpec]] = None,
-    pagination: Optional[Pagination] = None,
+    entity_key: EntityKey,
+    fields: Optional[List[EntityField]] = [EntityField.METADATA],
     block_number: Optional[int] = None
 ) -> GetResult:
     """
-    Fetch entities by annotation fields and metadata elements like $entity_key, $owner, etc.
+    Fetch single entity by entity key.
     Optionally specify which entity fields to retrieve.
-    Available fiels are "data", "annotations", and "metadata".
-    The default populates all available fields.
-    For block number None (default) the latest block number available to the client connection is used.
+    The default provides entity metadata fields.
+    Available fields are "data", "annotations", and "metadata".
+    For block number None (default) the latest avaliable block number is used.
     Only block_numbers covering the last n minutes are supported.
+    Raises EntityNotFoundError if no such entity exists.
+    Raises InvalidInputError for invalid arguments.
     """
 
 def count(self, query: str, block_number: int = None) -> CountResult:
@@ -228,5 +448,75 @@ def count(self, query: str, block_number: int = None) -> CountResult:
     Count matching entities for specified query and block_number.
     For block number None (default) the latest block number available to the client connection is used.
     Only block_numbers covering the last n minutes are supported.
+    Raises InvalidInputError for invalid arguments.
+    """
+
+def select(
+    self,
+    query: str,
+    fields: Optional[List[EntityField]] = None,
+    sort: Optional[List[SortSpec]] = None,
+    pagination: Optional[Pagination] = None,
+    block_number: Optional[int] = None
+) -> SelectResult:
+    """
+    Fetch entities by annotation fields and metadata elements like $entity_key, $owner, etc.
+    Optionally specify which entity fields to retrieve.
+    The default populates all available fields.
+    Available fields are "data", "annotations", and "metadata".
+    Optionally specify sort criteria.
+    The default sorts accorting to ascending entity keys.
+    For block number None (default) the latest block number available to the client connection is used.
+    Only block_numbers covering the last n minutes are supported.
+    Raises InvalidInputError for invalid arguments.
     """
 ```
+
+## AI Generated Hypothetical Feedback to Golem DB and its API
+
+### Simplicity-Focused Mid-Senior Web3 Dev
+
+
+### Seasoned Web3 Dev
+
+Golem DB’s design is refreshingly clear and well-structured, especially compared to many onchain data solutions I’ve worked with. The dual-role model (owner/operator) and explicit permissioning are a big plus for real-world use cases—this is much more flexible than the typical single-owner NFT or registry pattern. The API’s type safety and explicit error handling are also welcome; it’s obvious that developer experience was a priority.
+
+That said, my main concern is the cost and practicality of storing rich entity data and metadata onchain. The model supports binary data, annotations, and extensive metadata, but on most EVM chains, storing even a few kilobytes per entity is prohibitively expensive. I’d want to see clear guidance or patterns for offchain storage (e.g., IPFS, Arweave) with onchain anchoring, or at least a way to store only hashes or references onchain. The offchain verification section is a good start, but I’d like to see more concrete examples of hybrid storage patterns and how to keep onchain costs low.
+
+Overall, Golem DB’s API is a big step up in terms of clarity and permissioning, but for production use, I’d want to see best practices for minimizing onchain storage, handling large data, and integrating with offchain storage networks. If those are addressed, this could be a very compelling foundation for complex, multi-party web3 applications.
+
+### Sceptical Expert Web3 Dev
+
+Feedback from a Skeptical Senior Web3 Developer
+As someone who’s built and audited complex NFT protocols, DAOs, and real-world asset tokenization systems, I’m not immediately convinced that Golem DB offers something fundamentally new. Most of what I see—role-based permissions, entity metadata, offchain verification—can be (and often is) implemented with custom smart contracts, and the cost/complexity of onchain storage remains a major concern. I’m wary of introducing another abstraction layer unless it demonstrably reduces friction, cost, or risk compared to established patterns.
+
+I’d also want to know:
+
+How does Golem DB handle upgrades, migrations, and schema evolution?
+What’s the story for composability with existing DeFi/NFT standards?
+Is there a proven path for integrating with offchain storage and oracles, or is this just another “store everything onchain” system?
+How does it perform under high load, and what are the gas implications for batch operations or large entities?
+
+**Arguments & Changes to Convince the Skeptical Expert**
+1. Hybrid Storage Patterns Out-of-the-Box
+    - Show that Golem DB natively supports storing only hashes or CIDs onchain, with seamless hooks for IPFS, Arweave, or other decentralized storage.
+    - Provide code samples and reference integrations for hybrid onchain/offchain data flows.
+1. Composable, Modular Design
+    - Demonstrate how Golem DB entities can be wrapped or extended to comply with ERC-721, ERC-1155, or other standards, enabling easy integration with existing NFT/DeFi infrastructure.
+    - Offer adapters or plugins for common protocols (e.g., OpenSea, Zora, DAO frameworks).
+1. Schema Evolution & Upgradability
+    - Document how entity schemas can evolve over time without breaking existing data or requiring contract redeployment.
+    - Provide migration tools or patterns for real-world upgrades.
+1. Gas & Performance Benchmarks
+    - Publish benchmarks comparing Golem DB operations (create, update, batch, query) to hand-rolled Solidity patterns, highlighting any gas savings or trade-offs.
+    - Show how batch operations and partial data retrieval can reduce costs in practice.
+1. Security & Auditability
+    - Highlight how Golem DB’s signature and versioning model simplifies offchain audit trails, dispute resolution, and regulatory compliance compared to ad hoc solutions.
+1. Real-World Case Studies
+    - Share success stories or reference implementations where Golem DB enabled features or efficiencies that would have been painful or impossible with standard contract patterns.
+1. Open, Extensible API
+    - Emphasize that Golem DB is not a black box: developers can extend, audit, and customize every layer, and are not locked into a proprietary stack.
+
+**Summary**
+
+To win over skeptical, experienced web3 devs, Golem DB should focus on composability, hybrid storage, upgradability, and real-world cost/performance evidence—plus clear documentation and open extensibility. Show, don’t just tell, how it solves pain points that even the best custom contracts struggle with.
