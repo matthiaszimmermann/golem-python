@@ -2,6 +2,74 @@
 
 Golem DB is a flexible, permissioned entity storage and management system designed for decentralized and distributed applications. It provides a robust model for creating, updating, querying, and managing entities, each of which can store binary data, structured annotations, and rich metadata. The system is built to support both simple and advanced use cases, from personal asset management to complex multi-party workflows.
 
+## Benefits of Golem DB
+
+Golem DB radically reduces onchain storage costs and complexity, enabling decentralized apps to manage rich, permissioned data without relying on centralized cloud providers.
+
+Golem DB aspires to lower storage costs by 100x to 1000x over current L2 evm chains.
+This enables new decentralized use cases that are currently implemented using centralized storage services like AWS and Azure.
+
+### Data Architecture with Golem DB:
+
+| Data Type                      | Onchain              | Golem DB                | Cloud                            | Golem Benefits    |
+|--------------------------------|----------------------|-------------------------|----------------------------------|-------------------|
+| Cryptographic proofs & anchors | Yes (minimal hashes) | No                      | No                               | -                 |
+| Dynamic decentralized data     | No                   | Yes                     | No                               | Lower costs       |
+| Application critical state     | No                   | Yes (with expiry)       | No                               | Higher resilience |
+| User metadata & annotations    | No                   | Yes                     | Optional (Backup/analytics)      | Higher resilience |
+| Large binary assets (files)    | No                   | Optional, selective     | Yes (bulky data)                 | -                 |
+| Historical archives & logs     | No                   | Yes (short-medium term) | Yes (long-term archival storage) | -                 |
+
+### Golem DB Use Cases
+
+The list below provides a number of use cases that directly benefit from Golem DB features.
+These use cases go beyond generic storage to demonstrate how Golem DB's model supports efficient, secure, and scalable decentralized apps managing ephemeral or consumable data naturally.
+
+1. Messaging and Communication Systems
+    - Data Type: Messages, chats, multimedia that expire after defined retention time (e.g., 7 days, 1 month).
+    - Use of Golem DB: Store encrypted messages and metadata with expiry to ensure automatic deletion after retention period, maintaining user privacy and compliance.
+    - Value Added
+        - Decentralized, censorship-resistant message storage with built-in expiry.
+        - Avoids permanent on-chain data bloat.
+        - Ensures data automatically pruned, reducing storage overhead for nodes and users.
+1. DeFi Transaction States & Cross-Chain Transfers
+    - Data Type: Temporary transaction states, proofs of fulfillment, order statuses that only need to persist until transactions or cross-chain transfers finalize.
+    - Use of Golem DB: Track pending or in-flight transaction metadata, signatures, and event annotations with expiry aligned to transaction settlement times.
+    - Value Added
+        - Reduces reliance on expensive permanent onchain logs.
+        - Enables state pruning once transfers or trades settle, lowering gas and storage costs.
+        - Provides verifiable, audit-ready data throughout transaction lifecycles.
+1. Consumable and Time-Limited Virtual Goods
+    - Data Type: Virtual consumable assets (e.g., limited-use game items, event tickets) that exist only for a specified duration or until consumed.
+    - Use of Golem DB: Store ownership, usage state, and metadata with expiry aligned to item lifespan or event date.
+    - Value Added
+        - Automatically cleans up expired/used assets.
+        - Avoids accumulation of obsolete onchain state.
+        - Supports decentralized virtual economy with trustless lifecycle management.
+1.  Subscription and License Management
+    - Data Type: Licenses, subscriptions, or permissions valid only for limited periods.
+    - Use of Golem DB: Manage license metadata, proof of entitlement, and usage records with expiry tied to subscription length.
+    - Value Added
+        - Simplifies access control by enforcing expiry automatically.
+        - Enhances user privacy by pruning old license data.
+        - Allows flexible renewal and revocation workflows, all decentralized.
+1. Event-Driven Data & Temporary Workflows
+    - Data Type: Workflow states, event logs, or sensor data valid during active operations that expire post-completion.
+    - Use of Golem DB: Store incremental workflow or event metadata with expiry as workflows complete or events become irrelevant.
+    - Value Added
+        - Keeps active data verifiable and decentralized while preventing indefinite storage.
+        - Optimizes resource use for long-running decentralized applications.
+        - Facilitates auditability during critical active periods.
+
+**Benefit Summary**
+- Massive Cost Savings: Store and manage data at 100x–1000x lower cost than current L2 EVM chains.
+- Decentralized by Default: Eliminate reliance on AWS, Azure, or other centralized storage for critical state and metadata.
+- Rich Data Model: Support for binary data, structured annotations, and metadata—all with fine-grained permissions.
+- Auditability & Security: All state changes are cryptographically signed and fully auditable, both onchain and offchain.
+- Flexible Expiry & Retention: Built-in support for data expiry (BTL), short/medium-term storage, and seamless offchain archival.
+- Easy Integration: Simple, type-safe API and event model for rapid prototyping and production use.
+
+
 ## Entities
 
 Entities in Golem DB are governed by a dual-role model: every entity has an owner and an operator, each with clearly defined permissions. The owner controls transfer and deletion, while the operator manages data, annotations, and entity lifetime. All state changes are cryptographically signed, ensuring strong guarantees of authenticity, integrity, and auditability—both on-chain and off-chain.
