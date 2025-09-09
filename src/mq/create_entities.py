@@ -1,6 +1,7 @@
 import asyncio
 import os
 import uuid
+from datetime import datetime
 
 from dotenv import load_dotenv
 from golem_base_sdk import Annotation, EntityKey, GolemBaseClient, GolemBaseCreate
@@ -15,8 +16,8 @@ PRIVATE_KEY = os.getenv(
 RPC_URL = os.getenv("RPC_URL", "https://ethwarsaw.holesky.golemdb.io/rpc")
 WS_URL = os.getenv("WS_URL", "wss://ethwarsaw.holesky.golemdb.io/rpc/ws")
 
-BATCH_SIZE = 1000
-BATCHES = 3
+BATCH_SIZE = 1500
+BATCHES = 10
 
 
 async def create_entity(
@@ -60,7 +61,6 @@ async def create_batch(client: GolemBaseClient, batch_no: int) -> None:
 
     # Send batch
     receipts = await client.create_entities(entities)
-    print(f"Batch no {batch_no}: Created {len(receipts)} entities")
 
 
 async def create_client() -> GolemBaseClient | None:
@@ -74,7 +74,6 @@ async def create_client() -> GolemBaseClient | None:
         client = await GolemBaseClient.create_rw_client(
             rpc_url=RPC_URL, ws_url=WS_URL, private_key=private_key_bytes
         )
-        print("Connected to Golem DB")
         return client  # noqa: TRY300
 
     # in case of an exception/error just return None
@@ -86,10 +85,14 @@ async def create_client() -> GolemBaseClient | None:
 async def main() -> None:
     """Create multiple entities with different annotations."""
     client = await create_client()
+    print(f"{datetime.now().isoformat(timespec='seconds')} Connected to Golem DB")
 
     if isinstance(client, GolemBaseClient):
         for i in range(BATCHES):
             await create_batch(client, i)
+            print(
+                f"{datetime.now().isoformat(timespec='seconds')} Batch no {i}: Created {BATCH_SIZE} entities"
+            )
 
         await client.disconnect()
 
