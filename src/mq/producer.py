@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import sys
 
@@ -6,6 +7,7 @@ import pika
 from dotenv import load_dotenv
 from golem_base_sdk import (
     CreateEntityReturnType,
+    EntityKey,
     ExtendEntityReturnType,
     GolemBaseClient,
     UpdateEntityReturnType,
@@ -48,23 +50,34 @@ class EventProcessor:
         print("To exit press CTRL+C")
         await asyncio.Event().wait()
 
-    def _publish_to_mq(self, message: str) -> None:
-        self.mq_channel.basic_publish(
-            routing_key=GOLEM_DB_QUEUE, exchange="", body=message
-        )
-        print(f"Sent to Rabbit MQ queue '{GOLEM_DB_QUEUE}' -> message:'{message}'")
+    def _publish_to_mq(self, event) -> None:  # noqa: ANN001
+        # Build message as dict from event
+        message = {}
+        if hasattr(event, "expiration_block"):
+            message |= {"expiration_block": event.expiration_block}
+        if hasattr(event, "entity_key"):
+            entity_key: EntityKey = event.entity_key
+            message |= {"entity_key": f"{entity_key.as_hex_string()}"}
+
+        if message:
+            self.mq_channel.basic_publish(
+                routing_key=GOLEM_DB_QUEUE, exchange="", body=json.dumps(message)
+            )
+            print(f"Sent to Rabbit MQ queue '{GOLEM_DB_QUEUE}' -> message:'{message}'")
+        else:
+            print(f"Event not published (empty dict): {event}")
 
     def _on_created(self, event: CreateEntityReturnType) -> None:
-        self._publish_to_mq(f"Entity created: {event}")
+        self._publish_to_mq(event)
 
     def _on_updated(self, event: UpdateEntityReturnType) -> None:
-        self._publish_to_mq(f"Entity updated: {event}")
+        self._publish_to_mq(event)
 
     def _on_extended(self, event: ExtendEntityReturnType) -> None:
-        self._publish_to_mq(f"Entity extended: {event}")
+        self._publish_to_mq(event)
 
     def _on_deleted(self, event) -> None:  # noqa: ANN001
-        self._publish_to_mq(f"Entity deleted: {event}")
+        self._publish_to_mq(event)
 
     async def _setup_event_monitoring(self) -> None:
         """Set up and start Golem DB client and event monitoring."""
@@ -105,6 +118,8 @@ class EventProcessor:
 
 
 if __name__ == "__main__":
+    print("\n=== Golem DB event listener / MQ message producer ===")
+
     try:
         processor = EventProcessor()
         asyncio.run(processor.start())

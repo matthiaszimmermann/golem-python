@@ -1,4 +1,19 @@
-# RabbitMQ Integration
+# Golem DB: RabbitMQ Integration
+
+## Architecture
+
+```
++-----------+     +===========+     +------------------+     +===========+     +--------------+
+| Golem DB  |     | Golem DB  |     | Golem DB event   |     | Rabbit MQ |     | Rabbit MQ    |
+| entity    | --> |   Node    | --> | listener / MQ    | --> | Broker    | --> | Consumer(s)  |
+| creator   |     |           |     | message producer |     |           |     |              |
++-----------+     +===========+     +------------------+     +===========+     +--------------+
+                     Golem DB                                Docker Compose            |
+                     Warsaw                                  (Local)                   |
+                        ^                                                              |
+                        |                                                              |
+                        +--------------------------------------------------------------+
+```
 
 ## Install Pika (Python Lib)
 
