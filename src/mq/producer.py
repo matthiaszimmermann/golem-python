@@ -45,8 +45,7 @@ class EventProcessor:
     async def start(self) -> None:
         """Start Golem DB event monitoring."""
         await self._setup_event_monitoring()
-
-        print("Press Ctrl+C to exit.")
+        print("To exit press CTRL+C")
         await asyncio.Event().wait()
 
     def _publish_to_mq(self, message: str) -> None:
@@ -106,5 +105,9 @@ class EventProcessor:
 
 
 if __name__ == "__main__":
-    processor = EventProcessor()
-    asyncio.run(processor.start())
+    try:
+        processor = EventProcessor()
+        asyncio.run(processor.start())
+
+    except KeyboardInterrupt:
+        print("Shutting down...")
