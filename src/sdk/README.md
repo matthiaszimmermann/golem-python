@@ -178,6 +178,31 @@ await client.disconnect()
 
 ## Entity Role Model: Owner & Operator
 
+Entities have two distinct roles: Owners and operators.
+This distinction is vital to support many valuable use cases.
+
+1. NFTs and Digital Collectibles
+- Unique digital assets (art, music, in-game items, domain names) that can be bought, sold, or gifted.
+- Ownership: The core value is the ability to transfer, trade, or sell the asset.
+2. IoT Device Ownership and Delegation
+- Smart devices (routers, sensors, vehicles) whose control and management rights must be transferred (e.g., resale, leasing, or end-of-life).
+- Ownership: Ensures secure handover and prevents unauthorized access after transfer.
+3. Supply Chain Assets and Provenance
+- Physical goods, containers, or batches tracked onchain as they move between manufacturers, shippers, warehouses, and retailers.
+- Ownership: Each handoff must be cryptographically recorded to ensure provenance and accountability.
+4. Real Estate and Property Titles
+- Onchain representation of property deeds, leases, or rental agreements.
+- Ownership: Legal compliance and market liquidity depend on secure, auditable transfer.
+5. Intellectual Property and Patents
+- Digital representation of patents, trademarks, or copyrights.
+Ownership: Licensing, sale, or inheritance of IP requires clear, enforceable transfer.
+6. Digital Twin and Asset Tokenization
+- Onchain tokens representing real-world assets (machinery, vehicles, energy credits).
+- Ownership: Enables fractional ownership, secondary markets, and regulatory compliance.
+7. Decentralized Finance (DeFi) Positions
+- Ownership of liquidity positions, vaults, or derivatives.
+- Ownership: Enables composability, trading, and portfolio management.
+
 ### Owner
 
 - The address that owns the entity.
@@ -194,7 +219,6 @@ await client.disconnect()
 - Can transfer operator rights.
 - Can delete the entity.
 - Cannot transfer ownership.
-
 
 ### Permission Table
 
@@ -215,6 +239,32 @@ More sophisticated use cases will need to then use `transfer` (or `update` for o
 
 The creation of immutable entities may be achieved by setting the operator to a burn address (e.g., 0x000...1).
 Once immutable, neither owner nor operator can update or extend the entity, but the owner can still transfer or delete (if allowed).
+
+### Counter Arguments
+
+**Separate Ownership Not Needed**
+
+All logic and data can live on the Golem DB chain.
+Single owner per entity, all updates and verification handled offchain or on the Golem DB chain.
+
+Ideal for identity, reputation, static records, and non-transferable data.
+
+In addition: Offline Verification with separate owner and operator is a headache.
+
+**Separate Ownership Needed**
+
+Hybrid approach:
+Smart contract on mainnet/L2 manages ownership, transfer, and permissions.
+
+Pointer/reference in the contract to the corresponding Golem DB entity (e.g., entity key or hash).
+
+Extensive data and metadata stored and managed on the Golem DB chain for scalability and flexibility.
+This enables trustless, composable, and auditable ownership, while keeping rich data offchain.
+This hybrid model gives you the best of both worlds:
+
+Simplicity and efficiency for most use cases.
+Full composability, security, and scalability for advanced, asset-centric scenarios.
+
 
 ## Entity Elements
 
