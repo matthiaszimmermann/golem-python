@@ -64,7 +64,7 @@ These use cases go beyond generic storage to demonstrate how Golem DB's model su
 **Benefit Summary**
 - Massive Cost Savings: Store and manage data at 100x–1000x lower cost than current L2 EVM chains.
 - Decentralized by Default: Eliminate reliance on AWS, Azure, or other centralized storage for critical state and metadata.
-- Rich Data Model: Support for binary data, structured annotations, and metadata—all with fine-grained permissions.
+- Rich Data Model: Support for binary data, structured annotations, and metadata.
 - Auditability & Security: All state changes are cryptographically signed and fully auditable, both onchain and offchain.
 - Flexible Expiry & Retention: Built-in support for data expiry (BTL), short/medium-term storage, and seamless offchain archival.
 - Easy Integration: Simple, type-safe API and event model for rapid prototyping and production use.
@@ -72,7 +72,12 @@ These use cases go beyond generic storage to demonstrate how Golem DB's model su
 
 ## Entities
 
-Entities in Golem DB are governed by a dual-role model: every entity has an owner and an operator, each with clearly defined permissions. The owner controls transfer and deletion, while the operator manages data, annotations, and entity lifetime. All state changes are cryptographically signed, ensuring strong guarantees of authenticity, integrity, and auditability—both on-chain and off-chain.
+Entities are the core concept of Golem DB to store data.
+Entities can hold both unstructured and structured data and have a defined lifetime.
+
+Creating entities is permissionless.
+Once created, write access to entities in Golem DB is permissioned: The entity creator/owner is the only account that is allowed to change entity data and lifecycle.
+All state changes are cryptographically signed, ensuring strong guarantees of authenticity, integrity, and auditability—both on-chain and off-chain.
 
 The API is designed for clarity, type safety, and extensibility. It supports efficient partial data access, dynamic querying, sorting, and pagination, as well as historical queries by block number. Error handling is explicit and minimal, making it easy to integrate Golem DB into a wide range of applications and services.
 
@@ -98,10 +103,7 @@ result = client.get(
 print(f"Fetched entity metadata: {result.entity.metadata}")
 
 # Update/amend the entity with optional annotations
-client.update(
-    entity_key=entity_key,
-    annotations={"purpose": "demo", "version": 1}
-)
+client.update(entity_key, annotations={"purpose": "demo", "version": 1})
 
 # Fetch the full entity (default: all fields)
 result = client.get(entity_key)
@@ -132,15 +134,16 @@ batch_result = client.process(
         CreateOp(data=b"Gamma", annotations={"type": "test", "group": "A"}),
     ]
 )
-print("Created entities:" [res.entity_key for res in batch_result.creates])
+print("Created entities:", [res.entity_key for res in batch_result.creates])
 
 # Query for all entities with annotation type: "demo"
-select_result = db.select('type = "demo"')
+# The Golem DB query language is a valid subset of SQL
+select_result = client.select('type = "demo"')
 print('Query results (type="demo"):', [e.metadata.entity_key for e in select_result.entities])
 
 # Query for all entities with annotation type: "test" and group: "A"
-select_result = db.select('type = "test" && group = "A"')
-print('Query results (type="demo" && group = "A"):', [e.metadata.entity_key for e in select_result.entities])
+select_result = client.select('type = "test" and group = "A"')
+print('Query results (type="demo" and group = "A"):', [e.metadata.entity_key for e in select_result.entities])
 ```
 
 You can easily subscribe to entity lifecycle events using the subscribe method. For example, to listen for entity creation events and print all available information:
@@ -152,12 +155,11 @@ from golemdb import Client, EntityField
 def handle_created(event: EntityCreated) -> None:
     print("Entity created:")
     print(f"  entity_key: {event.entity_key}")
-    print(f"  owner: {event.owner}")
-    print(f"  operator: {event.operator}")
-    print(f"  expires_at: {event.expires_at}")
     print(f"  version: {event.version}")
+    print(f"  owner: {event.owner}")
+    print(f"  expires_in: {event.expires_in}")
     print(f"  data_hash: {event.data_hash.hex()}")
-    print(f"  annotations_hash: {event.annotations_hash.hex()}")
+    print(f"  annotations_root: {event.annotations_root.hex()}")
 
 # Initialize the client (details may vary depending on your setup)
 client = Client(RPC_URL, wallet, password)
@@ -168,7 +170,7 @@ handle: SubscriptionHandle = await client.subscribe(
     on_created=handle_created
 )
 
-# Trigger a entity creation callback
+# Trigger an entity creation callback
 client.create(data=b"Hello World!")
 
 # ... later, to clean up:
@@ -176,178 +178,80 @@ await handle.unsubscribe()
 await client.disconnect()
 ```
 
-## Entity Role Model: Owner & Operator
-
-Entities have two distinct roles: Owners and operators.
-This distinction is vital to support many valuable use cases.
-
-1. NFTs and Digital Collectibles
-- Unique digital assets (art, music, in-game items, domain names) that can be bought, sold, or gifted.
-- Ownership: The core value is the ability to transfer, trade, or sell the asset.
-2. IoT Device Ownership and Delegation
-- Smart devices (routers, sensors, vehicles) whose control and management rights must be transferred (e.g., resale, leasing, or end-of-life).
-- Ownership: Ensures secure handover and prevents unauthorized access after transfer.
-3. Supply Chain Assets and Provenance
-- Physical goods, containers, or batches tracked onchain as they move between manufacturers, shippers, warehouses, and retailers.
-- Ownership: Each handoff must be cryptographically recorded to ensure provenance and accountability.
-4. Real Estate and Property Titles
-- Onchain representation of property deeds, leases, or rental agreements.
-- Ownership: Legal compliance and market liquidity depend on secure, auditable transfer.
-5. Intellectual Property and Patents
-- Digital representation of patents, trademarks, or copyrights.
-Ownership: Licensing, sale, or inheritance of IP requires clear, enforceable transfer.
-6. Digital Twin and Asset Tokenization
-- Onchain tokens representing real-world assets (machinery, vehicles, energy credits).
-- Ownership: Enables fractional ownership, secondary markets, and regulatory compliance.
-7. Decentralized Finance (DeFi) Positions
-- Ownership of liquidity positions, vaults, or derivatives.
-- Ownership: Enables composability, trading, and portfolio management.
-
-### Owner
-
-- The address that owns the entity.
-- Can always transfer ownership to another address.
-- Can delete the entity.
-- Cannot update data/annotations or extend the entity.
-- Cannot transfer operator (see below).
-
-### Operator
-
-- The address with management rights over the entity.
-- Can update data and annotations.
-- Can extend the entity’s lifetime.
-- Can transfer operator rights.
-- Can delete the entity.
-- Cannot transfer ownership.
-
-### Permission Table
-
-| Action                  | Owner | Operator | Notes                                         |
-|-------------------------|:-----:|:--------:|-----------------------------------------------|
-| Create                  |  Yes  |   Yes    | Both can create entities                      |
-| Update Data/Annotations |   No  |   Yes    | Only operator can update                      |
-| Extend Lifetime         |   No  |   Yes    | Only operator can extend                      |
-| Delete                  |  Yes  |   Yes    | Both can delete                               |
-| Transfer Ownership      |  Yes  |    No    | Only owner can transfer                       |
-| Transfer Operator       |   No  |   Yes    | Only operator can transfer                    |
-| Make Immutable          |   No  |   Yes    | Special case for operator transfer, by setting to null/burn address |
-
-Newly created entities assign the signer to both owner and operator.
-This is sufficient for many simple use cases.
-
-More sophisticated use cases will need to then use `transfer` (or `update` for opererator transfers) to move to the desired role model.
-
-The creation of immutable entities may be achieved by setting the operator to a burn address (e.g., 0x000...1).
-Once immutable, neither owner nor operator can update or extend the entity, but the owner can still transfer or delete (if allowed).
-
-### Counter Arguments
-
-**Separate Ownership Not Needed**
-
-All logic and data can live on the Golem DB chain.
-Single owner per entity, all updates and verification handled offchain or on the Golem DB chain.
-
-Ideal for identity, reputation, static records, and non-transferable data.
-
-In addition: Offline Verification with separate owner and operator is a headache.
-
-**Separate Ownership Needed**
-
-Hybrid approach:
-Smart contract on mainnet/L2 manages ownership, transfer, and permissions.
-
-Pointer/reference in the contract to the corresponding Golem DB entity (e.g., entity key or hash).
-
-Extensive data and metadata stored and managed on the Golem DB chain for scalability and flexibility.
-This enables trustless, composable, and auditable ownership, while keeping rich data offchain.
-This hybrid model gives you the best of both worlds:
-
-Simplicity and efficiency for most use cases.
-Full composability, security, and scalability for advanced, asset-centric scenarios.
-
-
 ## Entity Elements
 
 ### Current Elements
 
-| Element       | Set on Create | Updatable    | Who Can Set/Change?             | Notes                                         |
-|---------------|:-------------:|:------------:|---------------------------------|-----------------------------------------------|
-| `entity_key`  | Yes           | No           | System/Contract                 | Unique identifier, auto-generated or derived  |
-| `data`        | Yes           | Yes          | Operator                        | Main payload, updatable by operator           |
-| `annotations` | Yes           | Yes          | Operator                        | Key-value metadata, updatable by operator     |
-| `owner`       | Yes (default: signer) | Yes (via transfer) | Owner (transfer_owner)       | Can be transferred after creation  |
-| `expires_at`  | Yes (via btl) | Yes (extend) | Operator                        | Set on create, can be extended by operator    |
-
-### Elements already discussed to be added
-
-| Element       | Set on Create | Updatable    | Who Can Set/Change?             | Notes                                         |
-|---------------|:-------------:|:------------:|---------------------------------|-----------------------------------------------|
-| `operator`    | Yes (default: signer) | Yes (via transfer) | Operator (transfer_operator) | Can be transferred after creation  |
+| Element       | Set on Create | Updatable    | Who Can Set/Change? | Notes                                        |
+|---------------|:-------------:|:------------:|---------------------|----------------------------------------------|
+| `entity_key`  | Yes           | No           | System/Contract     | Unique identifier, auto-generated, immutable |
+| `data`        | Yes           | Yes          | Owner               | Unstructured payload, updatable              |
+| `annotations` | Yes           | Yes          | Owner               | Key-value metadata, updatable                |
+| `owner`       | Yes (default: signer) | Yes  | Owner               | Can be transferred                           |
+| `expires_in`  | Yes (via btl) | Yes          | Owner               | Set on create, can be extended               |
 
 ### Elements to be discussed to be added
 
-| Element               | Set on Create | Updatable    | Who Can Set/Change? | Notes                                         |
-|-----------------------|:-------------:|:------------:|---------------------|-----------------------------------------------|
-| `created_at`          | Yes (auto)    | No           | System/Contract     | Block number at creation, immutable           |
-| `updated_at`          | Yes (auto)    | Yes (auto)   | System/Contract     | Updated on each change, auto-managed          |
-| `previous_owner`      | Yes (auto)    | Yes (auto)   | System/Contract     | Updated on each owner change, auto-managed    |
-| `previous_operator`   | Yes (auto)    | Yes (auto)   | System/Contract     | Updated on each operator change, auto-managed |
-| `operator_version`    | Yes (auto)    | Yes (auto)   | System/Contract     | Incremented on each update including the operator, auto-managed |
-| `owner_version`       | Yes (auto)    | Yes (auto)   | System/Contract     | Incremented on each update including the owner, auto-managed |
-| `owner_signature`     | Yes (auto)    | Yes (auto)   | Previous owner      | Proves authorization of ownership transfer    |
-| `operator_signature`  | Yes (auto)    | Yes (auto)   | Previous operator   | Proves authorization of operator-related changes (e.g., data, annotations, expiry, operator transfer)   |
+| Element             | Set on Create | Updatable    | Who Can Set/Change? | Notes                                         |
+|---------------------|:-------------:|:------------:|---------------------|-----------------------------------------------|
+| `created_in`        | Yes (auto)    | No           | System/Contract     | Block No at creation, immutable               |
+| `updated_in`        | Yes (auto)    | Yes (auto)   | System/Contract     | Updated on each change, auto-managed          |
+| `previous_owner`    | Yes (auto)    | Yes (auto)   | System/Contract     | Updated on each owner change, auto-managed    |
+| `version`           | Yes (auto)    | Yes (auto)   | System/Contract     | Incremented on each update including the owner, auto-managed |
+| `data_hash`         | Yes (auto)    | Yes (auto)   | System/Contract     | Hash over data field, recalculated at every change  |
+| `annotations_root`  | Yes (auto)    | Yes (auto)   | System/Contract     | Merkle root over annotations                  |
+| `entity_hash`       | Yes (auto)    | Yes (auto)   | System/Contract     | Hash over all other entity elements           |
+| `signature`         | Yes (auto)    | Yes (auto)   | System/Contract     | signature over entity hash by previous owner  |
 
 **Previous Owner**
 
 Records the previous owner.
 After the creation of a new entity the owner and previous owner both contain the signer address of the create transaction.
+Entity changes that do not change the owner will have identical owner and previous owner attributes.
 When the current owner transfers ownership to a new owner, the previous owner is set to the signer of the transfer transaction, the owner address is set to the new owner of the entity.
-
-**Previous Operator**
-
-Records the previous operator.
-After the creation of a new entity the operator and previous operator both contain the signer address of the create transaction.
-When the current operator transfers ownership to a new operator, the previous operator is set to the signer of the transfer transaction, the operator address is set to the new operator of the entity.
 
 **Version**
 
-Any change in data, annotations, lifetime, owner, operator increases the version.
+Any change in data, annotations, lifetime, or owner increases the version.
 It ensures that signatures are always bound to a specific state of the entity, guaranteeing that off-chain consumers can verify the exact version of the data they are trusting.
 
-**Owner Signature**
+**Data Hash**
 
-A cryptographic signature created by the owner of an entity.
-It serves as proof that the owner has authorized changes to owner-controlled fields.
-Specifically, the signed payload must include the previous_owner, the new owner, and the version of the entity (version after the ownership change).
+Hash over the unstructured data field.
+Used for the calculation of the entity hash.
+
+**Annotations Root**
+
+Merkle root over the annotations.
+Supports Merkle proofs of the value of individual annotations.
+
+**Entity Hash**
+
+Hash over version, entity key, expires_in, data_hash, annotations_root, previous_owner, owner.
+What about created_in, updated_in?
+
+**Signature**
+
+A cryptographic signature created by the owner of an entity over the entity hash.
+It serves as proof that the owner has authorized changes and the resulting state of the entity.
 
 For ownership transfers, the signature must be generated by the previous owner, ensuring that only the legitimate owner can approve such changes.
-The owner signature is only updated for ownership changes.
-
-This mechanism provides strong guarantees of authenticity and prevents unauthorized modifications to ownership.
-
-**Operator Signature**
-
-A cryptographic signature created by the operator of an entity.
-It serves as proof that the operator has authorized changes to operator-controlled fields.
-
-Specifically, the signed payload must include the previous_operator, the new operator (if applicable), all operator-controlled fields (such as data, annotations, and expires_at), and the version of the entity (version after the change). For operator transfers, the signature must be generated by the previous operator, ensuring that only the legitimate operator can approve such changes. The operator signature is only updated when operator-controlled fields are changed.
-
-This mechanism provides strong guarantees of authenticity and prevents unauthorized modifications to operator-managed aspects of the entity.
 
 ### Offchain Verification
 
-Offchain verification allows any party to independently confirm the authenticity and integrity of an entity’s data without relying on the Golem data chain.
-This is achieved through cryptographic signatures provided by the owner and operator, which prove that all changes to the entity were authorized by the correct parties.
+To verify the authenticity and integrity of the entity offchain:
 
-To verify an entity offchain, a verifier must obtain the full entity state, including all relevant metadata fields, the current and previous owner and operator addresses, the version, and both the owner_signature and operator_signature.
-The verifier then reconstructs the signed payloads for each signature, ensuring that all required fields (such as previous/current owner or operator, data, annotations, expires_at, and version) are included exactly as they were at the time of signing.
+1. Obtain the entity record (including data, annotations, owner, and signature).
+1. Recompute the hashes:
+- `data_hash = hash(data)`
+- `annotations_root = merkle_root(annotations)`
+- `entity_hash = hash(version || entity_key || expires_in || data_hash || annotations_root || previous_owner || owner)`
+1. Verify the owner’s signature:
+1. Use the owner’s public key to check that owner_signature is valid for entity_hash.
 
-Using the public keys of the previous owner and operator, the verifier checks that the signatures are valid for the given payloads.
-This process guarantees that no unauthorized changes have been made to the entity’s state and that each transition (such as ownership or operator changes) was explicitly approved by the correct party.
+**To verify individual annotation values**
 
-If any signature fails to verify, or if the entity state does not match the signed payloads, the entity data must be considered untrustworthy.
-
-Likely need to consider alternatives as complexity and practicability for verification by smart contracts does not seem practical...
+Use a Merkle proof to show that a specific annotation is included in annotations_root.
 
 ## Client API
 
@@ -372,16 +276,15 @@ class EntityField(Enum):
 class Metadata(NamedTuple):
     entity_key: EntityKey
     owner: ChecksumAddress
-    operator: ChecksumAddress
-    expires_at: int
-    created_at: int
-    updated_at: int
     previous_owner: ChecksumAddress
-    previous_operator: ChecksumAddress
-    owner_version: int
-    operator_version: int
-    owner_signature: bytes
-    operator_signature: bytes
+    expires_in: int
+    created_in: int
+    updated_in: int
+    version: int
+    data_hash: bytes
+    annotations_root: bytes
+    entity_hash: bytes
+    signature: bytes
 
 Annotations = Dict[str, Union[str, int]]
 
@@ -413,18 +316,14 @@ class CreateOp(NamedTuple):
     data: Optional[bytes] = None
     annotations: Optional[Annotations] = None
     btl: Optional[int] = None
-    operator: Optional[ChecksumAddress] = None
+    owner: Optional[ChecksumAddress] = None
 
 class UpdateOp(NamedTuple):
     entity_key: EntityKey
     data: Optional[bytes] = None
     annotations: Optional[Annotations] = None
     btl: Optional[int] = None
-    new_operator: Optional[ChecksumAddress] = None
-
-class TransferOp(NamedTuple):
-    entity_key: EntityKey
-    new_owner: ChecksumAddress
+    new_owner: Optional[ChecksumAddress] = None
 
 class DeleteOp(NamedTuple):
     entity_key: EntityKey
@@ -440,12 +339,6 @@ class CreateResult(NamedTuple):
     tx_hash: HexStr
 
 class UpdateResult(NamedTuple):
-    entity_key: EntityKey
-    success: bool
-    block_number: int
-    tx_hash: HexStr
-
-class TransferResult(NamedTuple):
     entity_key: EntityKey
     success: bool
     block_number: int
@@ -477,7 +370,7 @@ class CountResult(NamedTuple):
 class SelectResult(NamedTuple):
     """
     Provides matching results as a sorted list.
-    If not matching entities are found, an empty list is returned.
+    If no matching entities are found, an empty list is returned.
     """
     entities: List[Entity]
     block_number: int
@@ -492,42 +385,40 @@ class SelectResult(NamedTuple):
 class EntityCreated(NamedTuple):
     entity_key: EntityKey
     owner: ChecksumAddress
-    operator: ChecksumAddress
-    expires_at: int
     version: int
+    created_in: int
+    expires_in: int
     data_hash: HexStr
-    annotations_hash: HexStr
+    annotations_root: HexStr
 
 class EntityUpdated(NamedTuple):
     entity_key: EntityKey
-    operator: ChecksumAddress
+    owner: ChecksumAddress
     version: int
+    updated_in: int
     data_hash: HexStr
-    annotations_hash: HexStr
+    annotations_root: HexStr
 
-class EntityDeleted(NamedTuple):
+class EntityTransferred(NamedTuple):
     entity_key: EntityKey
-    by: ChecksumAddress
+    owner: ChecksumAddress
+    version: int
+    previous_owner: ChecksumAddress
 
 class EntityExtended(NamedTuple):
     entity_key: EntityKey
-    operator: ChecksumAddress
-    old_expires_at: int
-    new_expires_at: int
+    owner: ChecksumAddress
+    previous_expires_in: int
+    expires_in: int
+
+class EntityDeleted(NamedTuple):
+    entity_key: EntityKey
+    owner: ChecksumAddress
+    version: int
 
 class EntityExpired(NamedTuple):
     entity_key: EntityKey
-
-class EntityOwnershipTransferred(NamedTuple):
-    entity_key: EntityKey
-    previous_owner: ChecksumAddress
-    new_owner: ChecksumAddress
-    version: int
-
-class EntityOperatorTransferred(NamedTuple):
-    entity_key: EntityKey
-    previous_operator: ChecksumAddress
-    new_operator: ChecksumAddress
+    owner: ChecksumAddress
     version: int
 
 class SubscriptionHandle:
@@ -558,6 +449,9 @@ class PermissionDeniedError(EntityError):
 class InvalidInputError(EntityError):
     """Raised when input arguments are invalid."""
 
+class NodeError(EntityError):
+    """Raised for other Golem DB errors."""
+
 ```
 
 ### Methods (Create, Update, Delete)
@@ -568,14 +462,12 @@ def create(
     data: bytes,
     annotations: Optional[Annotations] = None,
     btl: int = 60,
-    operator: ChecksumAddress = None
+    owner: ChecksumAddress = None
 ) -> EntityKey:
     """
     Create a new entity.
-    Optionally specify an operator (manager/issuer).
-    Signer gets owner rights.
-    If no operator is specified, signer also gets operator rights.
-    Non-permissioned.
+    Optionally specify an owner (default owner is signer).
+    Permissionless.
     Raises InvalidInputError for invalid arguments.
     """
 
@@ -585,52 +477,41 @@ def update(
     data: bytes = None,
     annotations: Optional[Annotations] = None,
     btl: int = None,
-    operator: ChecksumAddress = None
+    new_owner: ChecksumAddress = None
 ) -> bool:
     """
-    Update data, annotations, transfer operator role, or extend the entitys lifetime.
+    Update data, annotations, transfer owner, or extend the lifetime of the entity.
     Arguments that are set to None will not lead to any changes.
-    Permissioned. Only allowed for current operator.
-    Raises EntityNotFoundError if no such entity exists.
-    Raises PermissionDeniedError if signer is not operator.
-    Raises InvalidInputError for invalid arguments.
-    """
-
-def transfer(self, entity_key: EntityKey, new_owner: ChecksumAddress) -> bool:
-    """
-    Transfer ownership role.
     Permissioned. Only allowed for current owner.
     Raises EntityNotFoundError if no such entity exists.
-    Raises PermissionDeniedError if signer is not owner.
+    Raises PermissionDeniedError if signer is not current owner.
     Raises InvalidInputError for invalid arguments.
     """
 
 def delete(self, entity_key: EntityKey) -> bool:
     """
     Delete the entity.
-    Permissioned. Only allowed for current owner or operator.
+    Permissioned. Only allowed for current owner.
     Raises EntityNotFoundError if no such entity exists.
-    Raises PermissionDeniedError if signer is not owner or operator.
+    Raises PermissionDeniedError if signer is not owner.
     Raises InvalidInputError for invalid arguments.
     """
 
 def process(
     self,
-    creates: List[CreateOp] = [],
-    updates: List[UpdateOp] = [],
-    transfers: List[TransferOp] = [],
-    deletes: List[DeleteOp] = []
+    creates: List[CreateOp] = None,
+    updates: List[UpdateOp] = None,
+    deletes: List[DeleteOp] = None
 ) -> ProcessResult:
     """
     Batch process multiple entity operations (create, update, delete) in a single transaction.
 
     - `creates`: List of CreateOp objects (same fields as the `create` method).
     - `updates`: List of UpdateOp objects (same fields as the `update` method).
-    - `transfers`: List of TransferOp objects (same fields as the `transfer` method).
     - `deletes`: List of DeleteOp objects (entity_key only).
 
     Each entity key may only be used once over all specified operations.
-    I.e. using an entity key in multiple update operators or using the same entity key in an update and/or a transfer and delete operation is not supported.
+    I.e. using an entity key in multiple updates or using the same entity key in an update and/or a transfer and delete operation is not supported.
     Returns a ProcessResult containing lists of result objects for each operation type.
 
     All operations are executed atomically: either all succeed, or none are applied.
@@ -646,7 +527,7 @@ def process(
 def exists(self, entity_key: EntityKey, block_number: Optional[int] = None) -> ExistsResult:
     """
     Return True if an entity exists for the specified entity key, False otherwise.
-    For block number None (default) the latest avaliable block number is used.
+    For block number None (default) the latest available block number is used.
     Only block_numbers covering the last n minutes are supported.
     Raises InvalidInputError for invalid arguments.
     """
@@ -662,7 +543,7 @@ def get(
     Optionally specify which entity fields to retrieve.
     The default provides entity metadata fields.
     Available fields are "data", "annotations", and "metadata".
-    For block number None (default) the latest avaliable block number is used.
+    For block number None (default) the latest available block number is used.
     Only block_numbers covering the last n minutes are supported.
     Raises EntityNotFoundError if no such entity exists.
     Raises InvalidInputError for invalid arguments.
@@ -686,11 +567,13 @@ def select(
 ) -> SelectResult:
     """
     Fetch entities by annotation fields and metadata elements like $entity_key, $owner, etc.
+    Query annotations and other fields.
+    Query language is a subset of SQL
     Optionally specify which entity fields to retrieve.
     The default populates all available fields.
     Available fields are "data", "annotations", and "metadata".
     Optionally specify sort criteria.
-    The default sorts accorting to ascending entity keys.
+    The default sorts according to ascending entity keys.
     For block number None (default) the latest block number available to the client connection is used.
     Only block_numbers covering the last n minutes are supported.
     Raises InvalidInputError for invalid arguments.
@@ -708,8 +591,7 @@ async def subscribe(
     on_created: Optional[Callable[[EntityCreated], None]] = None,
     on_updated: Optional[Callable[[EntityUpdated], None]] = None,
     on_extended: Optional[Callable[[EntityExtended], None]] = None,
-    on_ownership_transferred: Optional[Callable[[EntityOwnershipTransferred], None]] = None,
-    on_operator_transferred: Optional[Callable[[EntityOperatorTransferred], None]] = None,
+    on_transferred: Optional[Callable[[EntityTransferred], None]] = None,
     on_deleted: Optional[Callable[[EntityDeleted], None]] = None,
     on_expired: Optional[Callable[[EntityExpired], None]] = None,
 ) -> SubscriptionHandle:
@@ -720,8 +602,7 @@ async def subscribe(
       - on_created
       - on_updated
       - on_extended
-      - on_ownership_transferred
-      - on_operator_transferred
+      - on_transferred
       - on_deleted
       - on_expired
 
@@ -771,53 +652,46 @@ def reconnect_ws(self) -> bool
 ```solidity
 event EntityCreated(
     bytes32 indexed entityKey,
-    address indexed operator,
+    uint256 indexed version,
     address indexed owner,
-    uint256 expiresAt,
-    uint256 version,
+    uint256 expiresIn,
     bytes32 dataHash,         // keccak256 hash of the initial data
-    bytes32 annotationsHash   // keccak256 hash of the initial annotations
+    bytes32 annotationsRoot   // keccak256 hash of the initial annotations
 );
 
 event EntityUpdated(
     bytes32 indexed entityKey,
-    address indexed operator,
-    uint256 version,
-    bytes32 dataHash,         // keccak256 hash of the new data (or zero if unchanged)
-    bytes32 annotationsHash   // keccak256 hash of the new annotations (or zero if unchanged)
+    uint256 indexed version,
+    address indexed owner,
+    bytes32 dataHash,         // keccak256 hash of the new data
+    bytes32 annotationsRoot   // keccak256 hash of the new annotations
+);
+
+event EntityTransferred(
+    bytes32 indexed entityKey,
+    uint256 indexed version,
+    address indexed owner,
+    address previousOwner
 );
 
 event EntityExtended(
     bytes32 indexed entityKey,
-    address indexed operator,
-    uint256 oldExpiresAt,
-    uint256 newExpiresAt,
-    uint256 version
-);
-
-event EntityOwnershipTransferred(
-    bytes32 indexed entityKey,
-    address indexed previousOwner,
-    address indexed newOwner,
-    uint256 version
-);
-
-event EntityOperatorTransferred(
-    bytes32 indexed entityKey,
-    address indexed previousOperator,
-    address indexed newOperator,
-    uint256 version
+    uint256 indexed version,
+    address indexed owner,
+    uint256 oldExpiresIn,
+    uint256 expiresIn
 );
 
 event EntityDeleted(
     bytes32 indexed entityKey,
-    address indexed by,
-    uint256 version
+    uint256 indexed version,
+    address indexed owner
 );
 
 event EntityExpired(
     bytes32 indexed entityKey,
-    uint256 version
+    uint256 indexed version,
+    address indexed owner
 );
 ```
 
@@ -827,8 +701,7 @@ event EntityExpired(
 ### Simplicity-Focused Mid-Senior Web3 Dev
 
 Golem DB’s README is clear, well-structured, and approachable. The quick start examples are practical and easy to follow, showing how to create, update, and query entities with minimal boilerplate. The API feels familiar to anyone who’s used web3.py or similar SDKs, and the type hints and NamedTuple usage make it easy to reason about data structures.
-
-The permission model (owner/operator) is explained up front, and the permission table is a great touch—it’s immediately obvious who can do what. The batch/process API is also a nice feature for efficiency.
+The batch/process API is also a nice feature for efficiency.
 
 The event subscription section is especially strong:
 
@@ -840,7 +713,6 @@ The error handling and result types are explicit, so I know what to expect and h
 **What I like**
 
 Minimal, readable code samples—no magic, no unnecessary abstraction.
-Clear, permissioned model with real-world roles.
 Batch operations and event subscriptions are easy to use.
 Type safety and explicit error handling.
 
@@ -856,7 +728,7 @@ This is one of the more approachable and production-ready web3 SDKs I’ve seen.
 
 ### Seasoned Web3 Dev
 
-Golem DB’s design is refreshingly clear and well-structured, especially compared to many onchain data solutions I’ve worked with. The dual-role model (owner/operator) and explicit permissioning are a big plus for real-world use cases—this is much more flexible than the typical single-owner NFT or registry pattern. The API’s type safety and explicit error handling are also welcome; it’s obvious that developer experience was a priority.
+Golem DB’s design is refreshingly clear and well-structured, especially compared to many onchain data solutions I’ve worked with. The API’s type safety and explicit error handling are also welcome; it’s obvious that developer experience was a priority.
 
 That said, my main concern is the cost and practicality of storing rich entity data and metadata onchain. The model supports binary data, annotations, and extensive metadata, but on most EVM chains, storing even a few kilobytes per entity is prohibitively expensive. I’d want to see clear guidance or patterns for offchain storage (e.g., IPFS, Arweave) with onchain anchoring, or at least a way to store only hashes or references onchain. The offchain verification section is a good start, but I’d like to see more concrete examples of hybrid storage patterns and how to keep onchain costs low.
 
@@ -865,7 +737,7 @@ Overall, Golem DB’s API is a big step up in terms of clarity and permissioning
 ### Sceptical Expert Web3 Dev
 
 Feedback from a Skeptical Senior Web3 Developer
-As someone who’s built and audited complex NFT protocols, DAOs, and real-world asset tokenization systems, I’m not immediately convinced that Golem DB offers something fundamentally new. Most of what I see—role-based permissions, entity metadata, offchain verification—can be (and often is) implemented with custom smart contracts, and the cost/complexity of onchain storage remains a major concern. I’m wary of introducing another abstraction layer unless it demonstrably reduces friction, cost, or risk compared to established patterns.
+As someone who’s built and audited complex NFT protocols, DAOs, and real-world asset tokenization systems, I’m not immediately convinced that Golem DB offers something fundamentally new. Most of what I see—entity metadata, offchain verification—can be (and often is) implemented with custom smart contracts, and the cost/complexity of onchain storage remains a major concern. I’m wary of introducing another abstraction layer unless it demonstrably reduces friction, cost, or risk compared to established patterns.
 
 I’d also want to know:
 
