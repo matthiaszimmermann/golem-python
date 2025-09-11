@@ -157,7 +157,7 @@ def handle_created(event: EntityCreated) -> None:
     print(f"  entity_key: {event.entity_key}")
     print(f"  version: {event.version}")
     print(f"  owner: {event.owner}")
-    print(f"  expires_in: {event.expires_in}")
+    print(f"  expires_at_block: {event.expires_at_block}")
     print(f"  data_hash: {event.data_hash.hex()}")
     print(f"  annotations_root: {event.annotations_root.hex()}")
 
@@ -182,26 +182,26 @@ await client.disconnect()
 
 ### Current Elements
 
-| Element       | Set on Create | Updatable    | Who Can Set/Change? | Notes                                        |
-|---------------|:-------------:|:------------:|---------------------|----------------------------------------------|
-| `entity_key`  | Yes           | No           | System/Contract     | Unique identifier, auto-generated, immutable |
-| `data`        | Yes           | Yes          | Owner               | Unstructured payload, updatable              |
-| `annotations` | Yes           | Yes          | Owner               | Key-value metadata, updatable                |
-| `owner`       | Yes (default: signer) | Yes  | Owner               | Can be transferred                           |
-| `expires_in`  | Yes (via btl) | Yes          | Owner               | Set on create, can be extended               |
+| Element            | Set on Create | Updatable    | Who Can Set/Change? | Notes                                        |
+|--------------------|:-------------:|:------------:|---------------------|----------------------------------------------|
+| `entity_key`       | Yes           | No           | System/Contract     | Unique identifier, auto-generated, immutable |
+| `data`             | Yes           | Yes          | Owner               | Unstructured payload, updatable              |
+| `annotations`      | Yes           | Yes          | Owner               | Key-value metadata, updatable                |
+| `owner`            | Yes (default: signer) | Yes  | Owner               | Can be transferred                           |
+| `expires_at_block` | Yes (via btl) | Yes          | Owner               | Set on create, can be extended               |
 
-### Elements to be discussed to be added
+### Elements to be discussed/added
 
-| Element             | Set on Create | Updatable    | Who Can Set/Change? | Notes                                         |
-|---------------------|:-------------:|:------------:|---------------------|-----------------------------------------------|
-| `created_in`        | Yes (auto)    | No           | System/Contract     | Block No at creation, immutable               |
-| `updated_in`        | Yes (auto)    | Yes (auto)   | System/Contract     | Updated on each change, auto-managed          |
-| `previous_owner`    | Yes (auto)    | Yes (auto)   | System/Contract     | Updated on each owner change, auto-managed    |
-| `version`           | Yes (auto)    | Yes (auto)   | System/Contract     | Incremented on each update including the owner, auto-managed |
-| `data_hash`         | Yes (auto)    | Yes (auto)   | System/Contract     | Hash over data field, recalculated at every change  |
-| `annotations_root`  | Yes (auto)    | Yes (auto)   | System/Contract     | Merkle root over annotations                  |
-| `entity_hash`       | Yes (auto)    | Yes (auto)   | System/Contract     | Hash over all other entity elements           |
-| `signature`         | Yes (auto)    | Yes (auto)   | System/Contract     | signature over entity hash by previous owner  |
+| Element             | Set on Create | Updatable  | Who Can Set/Change? | Notes                                         |
+|---------------------|:-------------:|:----------:|---------------------|-----------------------------------------------|
+| `created_at_block`  | Yes (auto)    | No         | System/Contract     | Block No at creation, immutable               |
+| `updated_at_block`  | Yes (auto)    | Yes (auto) | System/Contract     | Updated on each change, auto-managed          |
+| `version`           | Yes (auto)    | Yes (auto) | System/Contract     | Incremented on each update including the owner, auto-managed |
+| `data_hash`         | Yes (auto)    | Yes (auto) | System/Contract     | Hash over data field, recalculated at every change  |
+| `annotations_root`  | Yes (auto)    | Yes (auto) | System/Contract     | Merkle root over annotations                  |
+| `previous_owner`    | Yes (auto)    | Yes (auto) | System/Contract     | Updated on each owner change, auto-managed    |
+| `entity_root`       | Yes (auto)    | Yes (auto) | System/Contract     | Hash over all entity Merkle tree              |
+| `signature`         | Yes (auto)    | Yes (auto) | System/Contract     | signature over entity hash by previous owner  |
 
 **Previous Owner**
 
@@ -227,8 +227,7 @@ Supports Merkle proofs of the value of individual annotations.
 
 **Entity Hash**
 
-Hash over version, entity key, expires_in, data_hash, annotations_root, previous_owner, owner.
-What about created_in, updated_in?
+Hash over version, entity key, expires_at_block, data_hash, annotations_root, previous_owner, owner.
 
 **Signature**
 
@@ -241,17 +240,124 @@ For ownership transfers, the signature must be generated by the previous owner, 
 
 To verify the authenticity and integrity of the entity offchain:
 
-1. Obtain the entity record (including data, annotations, owner, and signature).
+1. Obtain the entity record (including data, annotations, and metadata including signature).
 1. Recompute the hashes:
 - `data_hash = hash(data)`
 - `annotations_root = merkle_root(annotations)`
-- `entity_hash = hash(version || entity_key || expires_in || data_hash || annotations_root || previous_owner || owner)`
-1. Verify the owner’s signature:
-1. Use the owner’s public key to check that owner_signature is valid for entity_hash.
+- `entity_root = merkle_root(entity)`
+1. Verify the owner’s signature of the entity root:
+1. Use the owner’s public key to check that owner_signature is valid for entity_root.
 
 **To verify individual annotation values**
 
 Use a Merkle proof to show that a specific annotation is included in annotations_root.
+The annotation_root itself is embedded in the entity_root as shown below.
+
+```
+entity_root
+├── metadata_root
+│   ├── identity_root
+│   │   ├── entity_key (default value for creation)
+│   │   ├── version
+│   │   ├── owner
+│   │   └── previous_owner
+│   └── lifecycle_root
+│       ├── created_at_block (default value for creation)
+│       └── expires_at_block
+├── data_root
+│   ├── data_hash
+│   └── annotations_root
+```
+
+The entity root is only computed over attributes that are owner controlled.
+This is why updated_at_block is not shown in the Merkle tree.
+
+Annotations root needs to be computed in a deterministic way using the available annotation key value pairs.
+
+## Query DSL
+
+
+The Query DSL covers a subset of the SQL WHERE clause exclusing joins and groupings.
+
+### Query Examples
+
+Here are some useful example queries using the Golem DB Query DSL:
+
+| Query | Description |
+|-------|-------------|
+| `score > 100` | Entities with a numeric `score` greater than 100. |
+| `$expires_at_block <= 200000` | Entities expiring at or before block 2,000,000. |
+| `$owner = '0x1234...abcd'` | Entities owned by a specific address. |
+| `type IS NULL` | Entities where the `type` attribute is undefined. |
+| `purpose IS NOT NULL` | Entities where the `purpose` attribute is defined. |
+| `name LIKE 'Al%'` | Entities where the `name` attribute starts with 'Al'. |
+| `score >= 0 AND score < 100` | Entities with a `score` in the range [0, 100). |
+| `(type = 'demo' OR type = 'test') AND group = 'A'` | Entities of type 'demo' or 'test' in group 'A'. |
+| `$version != 1` | Entities where the `version` is not 1. |
+
+
+### DSL Features
+
+| Feature         | Syntax Example              | Description                                      |
+|-----------------|-----------------------------|--------------------------------------------------|
+| Equality        | `field = value`             | Field equals value                               |
+| Inequality      | `field != value`            | Field not equal to value                         |
+| Greater than    | `field > value`             | Field greater than value                         |
+| Greater/equal   | `field >= value`            | Field greater than or equal to value             |
+| Less than       | `field < value`             | Field less than value                            |
+| Less/equal      | `field <= value`            | Field less than or equal to value                |
+| IS NULL         | `field IS NULL`             | Field/attribute is undefined for the entity      |
+| IS NOT NULL     | `field IS NOT NULL`         | Field/attribute is defined for the entity        |
+| AND             | `expr1 AND expr2`           | Logical AND of two expressions                   |
+| OR              | `expr1 OR expr2`            | Logical OR of two expressions                    |
+| NOT             | `NOT expr`                  | Logical NOT of an expression                     |
+| Parentheses     | `(expr1 OR expr2) AND expr3`| Grouping and precedence control                  |
+| Numeric value   | `field = 123`               | Numeric values are unquoted                      |
+| String value    | `field = 'string'`          | String values must be single-quoted              |
+| Prefix match    | `field LIKE 'prefix%'`      | Field starts with a given string prefix          |
+
+### DSL Grammar
+
+```
+query        ::= expr
+expr         ::= term (("AND" | "OR") term)*
+term         ::= "NOT" term | factor
+factor       ::= comparison | null_check | "(" expr ")"
+comparison   ::= field op value
+null_check   ::= field "IS NULL" | field "IS NOT NULL"
+op           ::= "=" | "!=" | ">" | ">=" | "<" | "<=" | "LIKE"
+field        ::= identifier
+value        ::= string | number
+string       ::= "'" chars "'"
+chars        ::= (char | "''")*
+char         ::= any character except single quote (')
+                 or two single quotes ("''") for an escaped single quote
+number       ::= [+-]?[0-9]+
+```
+
+### Metadata Elements
+
+All metadata element names start with `$`.
+
+| Name                | Comment                       |
+|---------------------|-------------------------------|
+| `$id`               | Entity key (or $entity_key ?) |
+| `$owner`            | |
+| `$previous_owner`   | Owner before entity change |
+| `$version`          | |
+| `$created_at_block` | |
+| `$updated_at_block` | |
+| `$expires_at_block` | |
+| `$data_hash`        | |
+| `$annotations_root` | |
+| `$entity_root`      | |
+| `$signature`        | |
+
+### Entity Data and Annotations
+
+For `$data` and `$annotations` only null checks are supported.
+Annotation names must start with a letter `[a-z,A-Z]`.
+TODO define allowed charset for rest of the annotation names.
 
 ## Client API
 
@@ -277,13 +383,13 @@ class Metadata(NamedTuple):
     entity_key: EntityKey
     owner: ChecksumAddress
     previous_owner: ChecksumAddress
-    expires_in: int
-    created_in: int
-    updated_in: int
+    created_at_block: int
+    updated_at_block: int
+    expires_at_block: int
     version: int
     data_hash: bytes
     annotations_root: bytes
-    entity_hash: bytes
+    entity_root: bytes
     signature: bytes
 
 Annotations = Dict[str, Union[str, int]]
@@ -386,8 +492,8 @@ class EntityCreated(NamedTuple):
     entity_key: EntityKey
     owner: ChecksumAddress
     version: int
-    created_in: int
-    expires_in: int
+    created_at_block: int
+    expires_at_block: int
     data_hash: HexStr
     annotations_root: HexStr
 
@@ -395,7 +501,7 @@ class EntityUpdated(NamedTuple):
     entity_key: EntityKey
     owner: ChecksumAddress
     version: int
-    updated_in: int
+    updated_at_block: int
     data_hash: HexStr
     annotations_root: HexStr
 
@@ -408,8 +514,8 @@ class EntityTransferred(NamedTuple):
 class EntityExtended(NamedTuple):
     entity_key: EntityKey
     owner: ChecksumAddress
-    previous_expires_in: int
-    expires_in: int
+    previous_expires_at_block: int
+    expires_at_block: int
 
 class EntityDeleted(NamedTuple):
     entity_key: EntityKey
@@ -552,6 +658,8 @@ def get(
 def count(self, query: str, block_number: int = None) -> CountResult:
     """
     Count matching entities for specified query and block_number.
+    The query argument specifies which entries to return.
+    A subset of the SQL WHERE clause regarding annotations and metadata attributes is supported.
     For block number None (default) the latest block number available to the client connection is used.
     Only block_numbers covering the last n minutes are supported.
     Raises InvalidInputError for invalid arguments.
@@ -567,8 +675,8 @@ def select(
 ) -> SelectResult:
     """
     Fetch entities by annotation fields and metadata elements like $entity_key, $owner, etc.
-    Query annotations and other fields.
-    Query language is a subset of SQL
+    The query argument specifies which entries to return.
+    A subset of the SQL WHERE clause regarding annotations and metadata attributes is supported.
     Optionally specify which entity fields to retrieve.
     The default populates all available fields.
     Available fields are "data", "annotations", and "metadata".
