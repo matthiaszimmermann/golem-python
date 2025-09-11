@@ -1,6 +1,8 @@
-# Golem DB
+# Golem DB SDK
 
-Golem DB is a flexible, permissioned entity storage and management system designed for decentralized and distributed applications. It provides a robust model for creating, updating, querying, and managing entities, each of which can store binary data, structured annotations, and rich metadata. The system is built to support both simple and advanced use cases, from personal asset management to complex multi-party workflows.
+Golem DB is a permissioned storage system for decentralized apps, supporting flexible entities with binary data, annotations, and metadata.
+
+The Golem DB SDK is the official Python library for interacting with Golem DB networks. It offers a type-safe, developer-friendly API for managing entities, querying data, subscribing to events, and offchain verification—ideal for both rapid prototyping and production use.
 
 ## Benefits of Golem DB
 
