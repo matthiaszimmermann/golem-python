@@ -757,6 +757,24 @@ def reconnect_ws(self) -> bool
 
 ```
 
+## Testing
+
+This SDK includes a comprehensive automated test suite covering both unit and integration tests.
+
+### Local Testing
+
+Prepare the golemdb-node:latest Docker image.
+
+```bash
+git checkout https://github.com/Golem-Base/golembase-op-geth
+cd golembase-op-geth
+docker build -t golemdb-node:latest .
+```
+
+### Github Actions
+
+Once a Docker image is available for the Golem DB node from a public registry (such as Dockerhub) integration tests should be enabled for every push to the Github repository using Github actions.
+
 ## Solidity (Entity related Events)
 
 ```solidity

@@ -16,6 +16,8 @@ dependencies = [
     "pytest-asyncio>=1.1.0",
     "python-dotenv>=1.1.1",
     "pytz>=2024.2,<2025.0",
+    "requests>=2.32.4",
+    "testcontainers>=4.13.0",
 ]
 
 [tool.pytest.ini_options]
