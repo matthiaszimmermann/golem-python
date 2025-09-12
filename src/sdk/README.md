@@ -288,6 +288,7 @@ Here are some useful example queries using the Golem DB Query DSL:
 | Query | Description |
 |-------|-------------|
 | `score > 100` | Entities with a numeric `score` greater than 100. |
+| `type IN ('demo', 'test')` | Entities where the `type` attribute is either 'demo' or 'test'. |
 | `$expires_at_block <= 200000` | Entities expiring at or before block 2,000,000. |
 | `$owner = '0x1234...abcd'` | Entities owned by a specific address. |
 | `type IS NULL` | Entities where the `type` attribute is undefined. |
@@ -308,6 +309,7 @@ Here are some useful example queries using the Golem DB Query DSL:
 | Greater/equal   | `field >= value`            | Field greater than or equal to value             |
 | Less than       | `field < value`             | Field less than value                            |
 | Less/equal      | `field <= value`            | Field less than or equal to value                |
+| IN              | `field IN ('a', 'b', 'c')`  | Field matches any value in the given list        |
 | IS NULL         | `field IS NULL`             | Field/attribute is undefined for the entity      |
 | IS NOT NULL     | `field IS NOT NULL`         | Field/attribute is defined for the entity        |
 | AND             | `expr1 AND expr2`           | Logical AND of two expressions                   |
@@ -325,11 +327,12 @@ query        ::= expr
 expr         ::= term (("AND" | "OR") term)*
 term         ::= "NOT" term | factor
 factor       ::= comparison | null_check | "(" expr ")"
-comparison   ::= field op value
+comparison   ::= field op value | field "IN" "(" value_list ")"
 null_check   ::= field "IS NULL" | field "IS NOT NULL"
 op           ::= "=" | "!=" | ">" | ">=" | "<" | "<=" | "LIKE"
 field        ::= identifier
 value        ::= string | number
+value_list   ::= value ("," value)*
 string       ::= "'" chars "'"
 chars        ::= (char | "''")*
 char         ::= any character except single quote (')

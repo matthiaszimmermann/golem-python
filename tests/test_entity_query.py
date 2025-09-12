@@ -83,31 +83,12 @@ async def test_entity_query_batch(client: GolemBaseClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_entity_query_and_operator_fixme(client: GolemBaseClient) -> None:
+async def test_entity_query_with_operator_and_fixme(client: GolemBaseClient) -> None:
     """Modified test_entity_query_and_operator that always fails."""
     # Create first batch
     data_1 = b"1"
     data_2 = b"2"
-    previous_id = generate_uuid()
-    previous_receipts = await client.create_entities(
-        [
-            to_create_entity(
-                data_1, 60, {"id": previous_id, "color": "red", "size": 10}
-            ),
-            to_create_entity(
-                data_2, 60, {"id": previous_id, "color": "green", "size": 10}
-            ),
-        ]
-    )
-    previous_keys = [
-        receipt.entity_key.as_hex_string() for receipt in previous_receipts
-    ]
-    logger.info(f"Created previous entities with keys: {previous_keys}")  # noqa: G004
-
-    # Create second batch with different ID
     batch_id = generate_uuid()
-    assert batch_id != previous_id, "Batch ID should be unique"
-
     create_receipts = await client.create_entities(
         [
             to_create_entity(data_1, 60, {"id": batch_id, "color": "red", "size": 10}),
@@ -119,15 +100,30 @@ async def test_entity_query_and_operator_fixme(client: GolemBaseClient) -> None:
     entity_keys = [receipt.entity_key.as_hex_string() for receipt in create_receipts]
     logger.info(f"Created entities with keys: {entity_keys}")  # noqa: G004
 
-    # Query with two and clause
+    # Create second batch with different ID
+    other_id = generate_uuid()
+    assert batch_id != other_id, "Batch ID should be unique"
+    other_receipts = await client.create_entities(
+        [
+            to_create_entity(data_1, 60, {"id": other_id, "color": "red", "size": 10}),
+            to_create_entity(
+                data_2, 60, {"id": other_id, "color": "green", "size": 10}
+            ),
+        ]
+    )
+    other_keys = [receipt.entity_key.as_hex_string() for receipt in other_receipts]
+    logger.info(f"Created other entities with keys: {other_keys}")  # noqa: G004
+
+    # Query with two 'and' operators (1 result expected)
     query = f'id = "{batch_id}" {AND} color = "red" {AND} size = 10'
-    logger.info(f"Using query: '{query}'")  # noqa: G004
+    logger.info(f"Query: '{query}'")  # noqa: G004
     query_result = await client.query_entities(query)
-    _check_result(query_result, entity_keys, [data_1])  # type: ignore  # noqa: PGH003
+    logger.info(f"Result: '{query_result}'")  # noqa: G004
+    _check_result("A", query_result, entity_keys, [data_1])  # type: ignore  # noqa: PGH003
 
 
 @pytest.mark.asyncio
-async def test_entity_query_and_operator(client: GolemBaseClient) -> None:
+async def test_entity_query_with_operator_and(client: GolemBaseClient) -> None:
     """Create multiple entities and query them with an AND operator."""
     # Create multiple entities
     batch_id = generate_uuid()
@@ -142,7 +138,7 @@ async def test_entity_query_and_operator(client: GolemBaseClient) -> None:
 
     query_result = await client.query_entities(query)
     logger.info(f"Query result: '{query_result}'")  # noqa: G004
-    _check_result(query_result, entity_keys, [b"4"])  # type: ignore  # noqa: PGH003
+    _check_result("A", query_result, entity_keys, [b"4"])  # type: ignore  # noqa: PGH003
 
     # Query by batch ID and color = red (2 results expected)
     batch_id_clause = f'id = "{batch_id}"'
@@ -152,7 +148,7 @@ async def test_entity_query_and_operator(client: GolemBaseClient) -> None:
 
     query_result = await client.query_entities(query)
     logger.info(f"Query result: '{query_result}'")  # noqa: G004
-    _check_result(query_result, entity_keys, [b"1", b"3"])  # type: ignore  # noqa: PGH003
+    _check_result("B", query_result, entity_keys, [b"1", b"3"])  # type: ignore  # noqa: PGH003
 
     # Add size clause to the query (1 result expected)
     size_clause = "size = 10"
@@ -161,7 +157,7 @@ async def test_entity_query_and_operator(client: GolemBaseClient) -> None:
 
     query_result = await client.query_entities(query)
     logger.info(f"Query result: '{query_result}'")  # noqa: G004
-    _check_result(query_result, entity_keys, [b"1"])  # type: ignore  # noqa: PGH003
+    _check_result("C", query_result, entity_keys, [b"1"])  # type: ignore  # noqa: PGH003
 
     # Add second color clause to the query (0 results expected)
     blue_clause = 'color = "blue"'
@@ -170,13 +166,13 @@ async def test_entity_query_and_operator(client: GolemBaseClient) -> None:
 
     query_result = await client.query_entities(query)
     logger.info(f"Query result: '{query_result}'")  # noqa: G004
-    _check_result(query_result, entity_keys, [])  # type: ignore  # noqa: PGH003
+    _check_result("D", query_result, entity_keys, [])  # type: ignore  # noqa: PGH003
 
     logger.info("Multiple entity query with AND operator test passed successfully.")
 
 
 @pytest.mark.asyncio
-async def test_entity_query_or_operator(client: GolemBaseClient) -> None:
+async def test_entity_query_with_operator_or(client: GolemBaseClient) -> None:
     """Create multiple entities and query them with an OR operator."""
     # Create multiple entities
     batch_id = generate_uuid()
@@ -192,34 +188,37 @@ async def test_entity_query_or_operator(client: GolemBaseClient) -> None:
 
     query_result = await client.query_entities(query)
     logger.info(f"Query result: '{query_result}'")  # noqa: G004
-    _check_result(query_result, entity_keys, [b"2", b"4"])  # type: ignore  # noqa: PGH003
+    _check_result("A", query_result, entity_keys, [b"2", b"4"])  # type: ignore  # noqa: PGH003
 
 
 def _check_result(
+    label: str,
     query_result: Sequence[QueryEntitiesResult],
     entity_keys: list[str],
     expected_values: list[bytes],
 ) -> None:
     """Check that the query result matches the expected keys."""
     # Verify that the query result is not None and has the expected length
-    assert query_result is not None, "Query result should not be None"
+    assert query_result is not None, f"{label}: Query result should not be None"
     assert len(query_result) == len(expected_values), (
-        f"Query should return exactly {len(expected_values)} entities, but got {query_result}"  # noqa: E501
+        f"{label}: Query should return exactly {len(expected_values)} entities, but got {query_result}"  # noqa: E501
     )
 
     # Verify that all result keys are in the expected entity keys
     result_keys = [entity.entity_key for entity in query_result]
     for key in result_keys:
-        assert key in entity_keys, f"Entity key {key} should be in the expected keys"
+        assert key in entity_keys, (
+            f"{label}: Entity key {key} should be in the expected keys"
+        )
 
     # Verify that the result entity values match the expected values
     values = [entity.storage_value for entity in query_result]
     while len(values) > 0:
         value = values.pop(0)
         assert value in expected_values, (
-            f"Query result has unexpected value: {value}, expected: {expected_values}"
+            f"{label}: Query result has unexpected value: {value}, expected: {expected_values}"
         )
-        logger.info(f"Value {value} found in expected values")  # noqa: G004
+        logger.info(f"{label}: Value {value} found in expected values")  # noqa: G004
 
 
 async def _create_entries(
