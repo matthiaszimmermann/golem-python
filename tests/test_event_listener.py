@@ -6,14 +6,15 @@ import logging
 import pytest
 from golem_base_sdk import GolemBaseClient
 
-from tests.conftest import get_client
 from tests.utils import create_single_entity
 
 logger = logging.getLogger(__name__)
 
 
 @pytest.mark.asyncio
-async def test_create_event_callback(client: GolemBaseClient, network: str) -> None:
+async def test_create_event_callback(
+    client: GolemBaseClient, client2: GolemBaseClient
+) -> None:
     """Test creation event callback - simple focused test."""
     logger.info("Testing create event callback...")
 
@@ -46,7 +47,7 @@ async def test_create_event_callback(client: GolemBaseClient, network: str) -> N
 
     # Create separate notification client and wait until it is connected too
     # Use the same network as the main client
-    notification_client = await get_client(network=network)
+    notification_client = client2
     assert await notification_client.is_connected(), (
         "Notification client should be connected"
     )
