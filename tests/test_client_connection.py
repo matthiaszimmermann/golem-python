@@ -11,13 +11,31 @@ from testcontainers.core.container import DockerContainer
 logger = logging.getLogger(__name__)
 
 
-def test_golemdb_node(golemdb_node: tuple[DockerContainer, str]) -> None:
-    """Check if the Golem DB node (testcontainer) is available and responsive."""
-    _, host_port = golemdb_node
-    rpc_url = f"http://{host_port}"
-    response = requests.get(rpc_url, timeout=10)
+def test_golemdb_node(golemdb_node: tuple[DockerContainer, str, str]) -> None:
+    """Check if the Golem DB node is available and responsive via JSON-RPC."""
+    _, rpc_url, _ = golemdb_node
+
+    # Use JSON-RPC call - works for both dev and production nodes
+    rpc_payload = {"jsonrpc": "2.0", "method": "eth_chainId", "params": [], "id": 1}
+
+    response = requests.post(
+        rpc_url,
+        json=rpc_payload,
+        headers={"Content-Type": "application/json"},
+        timeout=10,
+    )
+
     assert response.status_code == 200, (
         f"GolemDB node should respond with 200 OK, got {response.status_code}"
+    )
+
+    # Verify it's a proper JSON-RPC response
+    json_response = response.json()
+    assert "result" in json_response or "error" in json_response, (
+        "Response should contain either 'result' or 'error' field"
+    )
+    assert json_response.get("jsonrpc") == "2.0", (
+        "Response should have jsonrpc version 2.0"
     )
 
 
