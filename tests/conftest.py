@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 DOT_ENV_FILE = ".env"
 
-NODE_IMAGE = "zimmatthias/golemdb-node:latest"
+NODE_IMAGE = "golemnetwork/golembase-op-geth:latest"
 NODE_PORT_HTTP = 8545
 NODE_PORT_WS = 8546
 

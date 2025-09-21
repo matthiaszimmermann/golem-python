@@ -32,6 +32,12 @@ jobs:
       - name: Install dependencies
         run: uv pip install -e ".[dev]"
 
+      - name: Check Node Image with Testcontainers
+        run: |
+          if [ -d "./tests/" ]; then
+            uv run pytest tests/test_client_connection.py::test_funded_account --log-cli-level=INFO
+          fi
+
       - name: Run Tests
         run: |
           if [ -d "./tests/" ]; then
