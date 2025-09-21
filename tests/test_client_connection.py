@@ -1,11 +1,53 @@
-"""Tests for GolemBaseClient connection and basic functionality."""  # noqa: INP001
+"""Tests for GolemBaseClient connection and basic functionality."""
 
 import logging
 
 import pytest
+import requests
+from eth_account.signers.local import LocalAccount
 from golem_base_sdk import GolemBaseClient
+from testcontainers.core.container import DockerContainer
 
 logger = logging.getLogger(__name__)
+
+
+def test_golemdb_node(golemdb_node: tuple[DockerContainer, str, str]) -> None:
+    """Check if the Golem DB node is available and responsive via JSON-RPC."""
+    _, rpc_url, _ = golemdb_node
+
+    # Use JSON-RPC call - works for both dev and production nodes
+    rpc_payload = {"jsonrpc": "2.0", "method": "eth_chainId", "params": [], "id": 1}
+
+    response = requests.post(
+        rpc_url,
+        json=rpc_payload,
+        headers={"Content-Type": "application/json"},
+        timeout=10,
+    )
+
+    assert response.status_code == 200, (
+        f"GolemDB node should respond with 200 OK, got {response.status_code}"
+    )
+
+    # Verify it's a proper JSON-RPC response
+    json_response = response.json()
+    assert "result" in json_response or "error" in json_response, (
+        "Response should contain either 'result' or 'error' field"
+    )
+    assert json_response.get("jsonrpc") == "2.0", (
+        "Response should have jsonrpc version 2.0"
+    )
+
+
+@pytest.mark.asyncio
+async def test_funded_account(
+    client: GolemBaseClient, client_account: LocalAccount
+) -> None:
+    """Check if the Golem DB node (testcontainer) is available and responsive."""
+    logger.info(f"Testing funded account: {client_account.address}")  # noqa: G004
+    http_client = client.http_client()
+    account_balance = await http_client.eth.get_balance(client_account.address)
+    assert account_balance > 0, f"Balance should be > 0, balance: {account_balance}"
 
 
 @pytest.mark.asyncio
@@ -60,17 +102,22 @@ async def test_client_contract_address(client: GolemBaseClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_client_account(client: GolemBaseClient) -> None:
+async def test_client_account(
+    client: GolemBaseClient, client_account: LocalAccount
+) -> None:
     """Test that the client is connected to a valid address and has some funding."""
     account_address = client.get_account_address()
+
+    # Basic checks on the account address
     assert account_address is not None
     assert isinstance(account_address, str)
-    logger.info(f"Client account address: {account_address}")  # noqa: G004
-
     assert client.http_client().is_address(account_address), (
         "Account address should be valid"
     )
 
+    assert account_address == client_account.address
+
+    # Check account balance
     account_balance = await client.http_client().eth.get_balance(account_address)
     assert isinstance(account_balance, int), "Account balance should be an integer"
     logger.info(f"Client account balance: ETH {account_balance / 10**18}")  # noqa: G004
