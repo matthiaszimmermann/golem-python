@@ -13,7 +13,6 @@ from .utils import create_single_entity, to_update_entity
 logger = logging.getLogger(__name__)
 
 
-# TODO move to test_entry_update.py once this exists
 @pytest.mark.asyncio
 async def test_update_entity_by_owner(client: GolemBaseClient) -> None:
     """Test updating an entity by its owner."""

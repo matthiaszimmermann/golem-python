@@ -37,7 +37,6 @@ async def test_entity_query_single(client: GolemBaseClient) -> None:
 
     assert query_result is not None, "Query result should not be None"
     assert len(query_result) == 1, "Query should return exactly one entity"
-    # TODO types of result keys and creation keys should match
     assert query_result[0].entity_key == entity_key, (
         "Query result should match the created entity key"
     )
@@ -82,7 +81,6 @@ async def test_entity_query_batch(client: GolemBaseClient) -> None:
     logger.info("Multiple entity query test passed successfully.")
 
 
-@pytest.mark.skip(reason="enable once double and issue is fixed")
 @pytest.mark.asyncio
 async def test_entity_query_with_operator_and_fixme(client: GolemBaseClient) -> None:
     """Modified test_entity_query_and_operator that always fails."""
@@ -151,14 +149,13 @@ async def test_entity_query_with_operator_and(client: GolemBaseClient) -> None:
     logger.info(f"Query result: '{query_result}'")  # noqa: G004
     _check_result("B", query_result, entity_keys, [b"1", b"3"])  # type: ignore  # noqa: PGH003
 
-    # Re-enable once double and issue is fixed
     # Add size clause to the query (1 result expected)
-    # size_clause = "size = 10"
-    # query = f"{batch_id_clause} {AND} {red_clause} {AND} {size_clause}"
-    # logger.info(f"Using double and query (1 result): '{query}'")
-    # query_result = await client.query_entities(query)
-    # logger.info(f"Query result: '{query_result}'")
-    # _check_result("C", query_result, entity_keys, [b"1"])  # type: ignore  # noqa: PGH003
+    size_clause = "size = 10"
+    query = f"{batch_id_clause} {AND} {red_clause} {AND} {size_clause}"
+    logger.info(f"Using double and query (1 result): '{query}'")  # noqa: G004
+    query_result = await client.query_entities(query)
+    logger.info(f"Query result: '{query_result}'")  # noqa: G004
+    _check_result("C", query_result, entity_keys, [b"1"])  # type: ignore  # noqa: PGH003
 
     # Add second color clause to the query (0 results expected)
     blue_clause = 'color = "blue"'
@@ -217,7 +214,7 @@ def _check_result(
     while len(values) > 0:
         value = values.pop(0)
         assert value in expected_values, (
-            f"{label}: Query result has unexpected value: {value}, expected: {expected_values}"
+            f"{label}: Query result has unexpected value: {value}, expected: {expected_values}"  # noqa: E501
         )
         logger.info(f"{label}: Value {value} found in expected values")  # noqa: G004
 
