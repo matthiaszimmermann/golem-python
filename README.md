@@ -189,3 +189,23 @@ To run the tests against the kaolin network
 ```bash
 uv run pytest --network=kaolin
 ```
+
+## CI / CD
+
+This repo is using Github actions.
+See `.github/workflows/ci.yml`
+
+Consider to re-enable the following steps.
+
+```yaml
+      - name: Run Ruff Lint
+        run: uv run ruff check --output-format=github .
+
+      - name: Run Ruff Format Check
+        run: uv run ruff format . --check --diff
+
+      - name: Run Pyright
+        uses: jakebailey/pyright-action@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+```
