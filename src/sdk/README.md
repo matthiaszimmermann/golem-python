@@ -278,8 +278,10 @@ Annotations root needs to be computed in a deterministic way using the available
 
 ## Query DSL
 
-
 The Query DSL covers a subset of the SQL WHERE clause exclusing joins and groupings.
+Goal: valid Golem DB queries are valid SQL WHERE clauses.
+
+LIKE vs Glob: Favour LIKE as Glob is SQLite specific and not SQL standard. Likely reduces migration costs should we want to move to some other SQL database engine at a later state.
 
 ### Query Examples
 
