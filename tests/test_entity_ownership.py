@@ -33,12 +33,13 @@ async def test_update_entity_by_non_owner(
     entity_key = await _create_and_test_entity(client, b"owner_test", {"my_value": "a"})
 
     # This should fail because client2 is not the owner
-    with pytest.raises(Web3RPCError, match="is not the owner"):
+    with pytest.raises(Web3RPCError, match="is not the owner") as exc_info:
         await _update_and_test_entity(
             client2, entity_key, b"owner_test_updated", {"my_value": "a_updated"}
         )
 
-    logger.info("Entity update by non-owner correctly failed")
+    logger.info(f"Expected exception: {exc_info.value}")
+    logger.info("Entity update by non-owner correctly failed: %s", exc_info.value)
 
 
 @pytest.mark.asyncio
