@@ -4,6 +4,112 @@ Golem DB is a permissioned storage system for decentralized apps, supporting fle
 
 The Golem DB SDK is the official Python library for interacting with Golem DB networks. It offers a type-safe, developer-friendly API for managing entities, querying data, subscribing to events, and offchain verification—ideal for both rapid prototyping and production use.
 
+## SDK Architecture
+
+### Principles
+
+SDK should be directly derived from one of the most well known and more recent client libraries.
+
+Highlevel goals:
+1. Go with the flow of the language and the library.
+2. Whatever works for the library should also work for the SDK
+3. Feels like "Library + Entities".
+
+### Underlying Libraries
+
+Go per language with modern and battle tested library.
+
+- Javascript/Typescript: [Viem](https://github.com/wevm/viem). Primary choice for most new web3 projects.
+- Python: [Web3.py](https://github.com/ethereum/web3.py). No good alternatives.
+- Rust: ethers-rs](https://github.com/gakonst/ethers-rs) or [Alloy](https://github.com/alloy-rs/alloy). Not yet decided
+
+### Naming
+
+Github "Home": `arkiv-network`
+| Language | Element            | Name           | Comment                 |
+|----------|--------------------|----------------|-------------------------|
+| Python   | Repository         | `arkiv-python` | Golem Base repo: `python-sdk` move and rename to `arkiv-python-beta` |
+| TS/JS    | Repository         | `arkiv-js` | Golem Base repo: `typescript-sdk` move and rename to `arkiv-js-beta` |
+| Rust    | Repository         | `arkiv-rust` | Golem Base repo: `rust-sdk` move and rename to `arkiv-rust-beta`|
+| Python   | PIP        | `pip install arkiv-sdk` | or `pip install arkiv` as `arkiv` is not available for rust |
+| TS/JS    | NPM        | `npm install arkiv-sdk` | or `npm install arkiv` as `arkiv` is not available for rust |
+| Rust    | Cargo        | `cargo add arkiv-sdk` |
+
+### Client
+
+Client creation:
+- Viem: client creation through factory functions `createPublicClient`, `createWalletClient`
+- Web3py: client creation though `Web3` constructor
+- not checked
+
+#### Javascript Arkiv Client
+
+Goal: Make Arkiv feel like "viem + entities" rather than a separate library.
+
+```typescript
+import { createArkivPublicClient, createArkivWalletClient } from 'arkiv'
+import { http } from 'viem'
+import { arkivMainnet } from 'arkiv/chains'
+
+const publicClient = createArkivPublicClient({
+  chain: arkivMainnet,
+  transport: http('https://rpc.arkiv.network')
+})
+
+const walletClient = createArkivWalletClient({
+  chain: arkivMainnet,
+  transport: http('https://rpc.arkiv.network'),
+  account: privateKeyToAccount('0x...')
+})
+
+// Standard blockchain operations
+const balance = await publicClient.getBalance({
+  address: '0x...'
+})
+
+// Write operations
+const txHash = await walletClient.createEntity({
+  data: new Uint8Array([1, 2, 3, 4]),
+  annotations: { purpose: 'demo' }
+})
+```
+
+
+#### Python Arkiv Client
+
+Goal: Make Arkiv feel like "web3.py + entities", maintaining the familiar developer experience that Python web3 developers.
+
+A `client.entities.*` approach for consistency with web3.py's module pattern. It clearly communicates that arkiv is a module extension just like eth, net, etc.
+
+```python
+class Arkiv(Web3):
+    ...
+
+client = Arkiv(HTTPProvider('https://rpc.arkiv.network'))
+
+# Standard web3.py modules still available
+client.eth.get_balance('0x...')
+client.eth.send_transaction({...})
+
+# New arkiv module for entity operations
+client.arkiv.create_entity(data=b"hello", annotations={"type": "demo"})
+client.arkiv.get_entity(entity_key)
+```
+
+#### Comparison
+
+Reasons for differntiation between SDKs
+1. JavaScript Ecosystem Conventions
+    - Flat APIs: client.method() is the norm
+    - Object parameters: { param1, param2 } style
+    - viem pattern: All methods directly on client
+
+2. Python Ecosystem Conventions
+    - Module organization: client.module.method()
+    - Positional + keyword args: More flexible parameter styles
+    - web3.py pattern: w3.eth.send_transaction(), w3.net.version
+
+
 ## Benefits of Golem DB
 
 Golem DB radically reduces onchain storage costs and complexity, enabling decentralized apps to manage rich, permissioned data without relying on centralized cloud providers.
@@ -83,12 +189,18 @@ All state changes are cryptographically signed, ensuring strong guarantees of au
 
 The API is designed for clarity, type safety, and extensibility. It supports efficient partial data access, dynamic querying, sorting, and pagination, as well as historical queries by block number. Error handling is explicit and minimal, making it easy to integrate Golem DB into a wide range of applications and services.
 
+ 
 ## Quick Start
 
 The following quick start example demonstrates how easy it is to create, update, fetch, and delete entities using Golem DB. With sensible defaults for all optional fields, you can get up and running with just a few lines of code—perfect for rapid prototyping or exploring the API’s core features.
 
 ```python
 from golemdb import Client, EntityField
+from pyarkiv import WalletClient, PublicClient, create_wallet_client
+
+1. wallet_client = WalletClient(...) <- as in web3.py (go for this with python)
+2. wallet_client = WalletClient.create(...)
+3. wallet_client = create_wallet_client(...) <- this is more js approach
 
 # Initialize the client (details may vary depending on your setup)
 client = Client(RPC_URL, wallet, password)

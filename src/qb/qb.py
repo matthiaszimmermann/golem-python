@@ -1,97 +1,172 @@
-from typing import Any, List, Union
+from typing import Any, List
 
-# Standalone condition functions
-def eq(field: str, value: Any) -> str:
-    """Create an equality condition: field = "value"."""
-    return f'{field} = "{value}"'
+AND = "&&"
+OR = "||"
+class Condition:
+    """Represents a query condition that can be combined with others."""
 
-def ne(field: str, value: Any) -> str:
-    """Create a not-equal condition: field != "value"."""
-    return f'{field} != "{value}"'
+    def __init__(self, expression: str):
+        self.expression = expression
 
-def gt(field: str, value: Any) -> str:
-    """Create a greater-than condition: field > "value"."""
-    return f'{field} > "{value}"'
+    def and_(self, other: "Condition") -> "Condition":
+        """Combine this condition with another using AND."""
+        return Condition(f"({self.expression} {AND} {other.expression})")
 
-def lt(field: str, value: Any) -> str:
-    """Create a less-than condition: field < "value"."""
-    return f'{field} < "{value}"'
+    def or_(self, other: "Condition") -> "Condition":
+        """Combine this condition with another using OR."""
+        return Condition(f"({self.expression} {OR} {other.expression})")
 
-def and_(*conditions: Union[str, "QueryGroup"]) -> "QueryGroup":
-    """Create an AND group of conditions."""
-    return QueryGroup("&&", list(conditions))
+    def not_(self) -> "Condition":
+        """Negate this condition using NOT."""
+        return Condition(f"!({self.expression})")
 
-def or_(*conditions: Union[str, "QueryGroup"]) -> "QueryGroup":
-    """Create an OR group of conditions."""
-    return QueryGroup("||", list(conditions))
+    def __str__(self) -> str:
+        return self.expression
 
-class QueryGroup:
-    """Represents a group of conditions with an operator."""
 
-    def __init__(self, operator: str, conditions: List[Union[str, "QueryGroup"]]) -> None:
-        self.operator = operator
-        self.conditions = conditions
+class Field:
+    """Represents a queryable field with comparison operations."""
 
-    def to_string(self) -> str:
-        """Convert the group to a query string."""
-        condition_strings = []
-        for condition in self.conditions:
-            if isinstance(condition, QueryGroup):
-                condition_strings.append(f"({condition.to_string()})")
-            else:
-                condition_strings.append(str(condition))
+    def __init__(self, name: str):
+        self.name = name
 
-        return f" {self.operator} ".join(condition_strings)
+    def _format_value(self, value: Any) -> str:
+        """Format value for query string based on type."""
+        if isinstance(value, int):
+            if value < 0:
+                raise ValueError("Only positive values are allowed for integer fields")
+            return str(value)
+        else:
+            return f'"{value}"'
+
+    def eq(self, value: Any) -> Condition:
+        """Create equality condition: field = "value" or field = value."""
+        return Condition(f'{self.name} = {self._format_value(value)}')
+
+    def ne(self, value: Any) -> Condition:
+        """Create not-equal condition: field != "value" or field != value."""
+        return Condition(f'{self.name} != {self._format_value(value)}')
+
+    def gt(self, value: Any) -> Condition:
+        """Create greater-than condition: field > "value" or field > value."""
+        return Condition(f'{self.name} > {self._format_value(value)}')
+
+    def lt(self, value: Any) -> Condition:
+        """Create less-than condition: field < "value" or field < value."""
+        return Condition(f'{self.name} < {self._format_value(value)}')
+
+    def ge(self, value: Any) -> Condition:
+        """Create greater-than-or-equal condition: field >= "value" or field >= value."""
+        return Condition(f'{self.name} >= {self._format_value(value)}')
+
+    def le(self, value: Any) -> Condition:
+        """Create less-than-or-equal condition: field <= "value" or field <= value."""
+        return Condition(f'{self.name} <= {self._format_value(value)}')
+
+    def like(self, pattern: str) -> Condition:
+        """Create LIKE condition: field LIKE "pattern"."""
+        return Condition(f'{self.name} LIKE "{pattern}"')
+
+    def in_(self, *values: Any) -> Condition:
+        """Create IN condition: field IN (value1, value2, ...) with proper value formatting."""
+        value_list = ', '.join(self._format_value(v) for v in values)
+        return Condition(f'{self.name} IN ({value_list})')
+
 
 class QueryBuilder:
-    """Fluent API for building GolemBase entity queries."""
+    """JOOQ-inspired fluent query builder for GolemBase."""
 
-    def __init__(self) -> None:
-        self._parts: List[Union[str, QueryGroup]] = []
+    def __init__(self):
+        self._conditions: List[Condition] = []
 
-    def where(self, field: str, operator: str, value: Any) -> "QueryBuilder":
-        """Add a WHERE condition with field = value."""
-        condition = f'{field} {operator} "{value}"'
-        self._parts.append(condition)
+    def where(self, condition: Condition) -> "QueryBuilder":
+        """Add a WHERE condition."""
+        self._conditions.append(condition)
         return self
 
-    def equals(self, field: str, value: Any) -> "QueryBuilder":
-        """Add equality condition: field = "value"."""
-        return self.where(field, "=", value)
-
-    def eq(self, field: str, value: Any) -> "QueryBuilder":
-        """Add equality condition: field = "value" (alias for equals)."""
-        return self.equals(field, value)
-
-    def by_id(self, entity_id: str) -> "QueryBuilder":
-        """Filter by entity ID."""
-        return self.equals("id", entity_id)
-
-    def and_(self, *conditions: Union[str, QueryGroup]) -> "QueryBuilder":
-        """Add an AND group of conditions."""
-        group = QueryGroup("&&", list(conditions))
-        self._parts.append(group)
+    def and_(self, condition: Condition) -> "QueryBuilder":
+        """Add an AND condition to the last condition."""
+        if self._conditions:
+            last = self._conditions[-1]
+            self._conditions[-1] = last.and_(condition)
+        else:
+            self._conditions.append(condition)
         return self
 
-    def or_(self, *conditions: Union[str, QueryGroup]) -> "QueryBuilder":
-        """Add an OR group of conditions."""
-        group = QueryGroup("||", list(conditions))
-        self._parts.append(group)
+    def or_(self, condition: Condition) -> "QueryBuilder":
+        """Add an OR condition to the last condition."""
+        if self._conditions:
+            last = self._conditions[-1]
+            self._conditions[-1] = last.or_(condition)
+        else:
+            self._conditions.append(condition)
         return self
 
     def build(self) -> str:
         """Build the final query string."""
-        if not self._parts:
+        if not self._conditions:
             return ""
+        return " && ".join(str(c) for c in self._conditions)
 
-        result_parts = []
-        for part in self._parts:
-            if isinstance(part, QueryGroup):
-                if len(part.conditions) > 1:
-                    result_parts.append(f"({part.to_string()})")
-                else:
-                    result_parts.append(part.to_string())
-            else:
-                result_parts.append(str(part))
 
-        return " && ".join(result_parts)
+# System entity attributes (compile-time known)
+ID = Field("$id") # entity key
+OWNER = Field("$owner")
+EXPIRES_AT = Field("$expires_at")
+CREATED_AT = Field("$created_at")
+UPDATED_AT = Field("$updated_at")
+
+
+class Annotations:
+    """Dynamic field accessor for user-defined annotations."""
+
+    def __getattr__(self, name: str) -> Field:
+        """Create a field for any annotation name using dot notation."""
+        return Field(name)
+
+    def __getitem__(self, name: str) -> Field:
+        """Create a field for any annotation name using bracket notation."""
+        return Field(name)
+
+
+# Global annotations instance for user-defined fields
+ANNOTATIONS = Annotations()
+
+
+# Convenience functions for creating conditions
+def and_(*conditions: Condition) -> Condition:
+    """Create an AND combination of multiple conditions."""
+    if not conditions:
+        raise ValueError("At least one condition is required")
+
+    result = conditions[0]
+    for condition in conditions[1:]:
+        result = result.and_(condition)
+    return result
+
+
+def or_(*conditions: Condition) -> Condition:
+    """Create an OR combination of multiple conditions."""
+    if not conditions:
+        raise ValueError("At least one condition is required")
+
+    result = conditions[0]
+    for condition in conditions[1:]:
+        result = result.or_(condition)
+    return result
+
+
+def not_(condition: Condition) -> Condition:
+    """Create a NOT (negation) of a condition."""
+    return condition.not_()
+
+
+# Additional utility functions
+def field(name: str) -> Field:
+    """Create a custom field for dynamic field names."""
+    return Field(name)
+
+
+def custom_condition(expression: str) -> Condition:
+    """Create a custom condition with raw expression."""
+    return Condition(expression)

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 from eth_typing import HexStr
-from golem_base_sdk import Address, GenericBytes, GolemBaseClient
+from golem_base_sdk import Address, Annotation, GenericBytes, GolemBaseClient, GolemBaseCreate
 from web3 import AsyncWeb3
 
 if TYPE_CHECKING:
@@ -42,3 +42,7 @@ async def test_subscribe_to_create_event(client: GolemBaseClient) -> None:
         subscription_id = await w3.eth.subscribe("logs", subscription_arg=filter_params)
         logger.info("Subscription %s successfully created.", subscription_id)
         assert subscription_id, "Subscription ID should not be None"
+
+        create_receipt = await client.create_entities(
+        [GolemBaseCreate(b"hello", 60, [Annotation("app", "test")], [])]
+    )
