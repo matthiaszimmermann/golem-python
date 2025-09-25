@@ -26,14 +26,20 @@ Go per language with modern and battle tested library.
 ### Naming
 
 Github "Home": `arkiv-network`
-| Language | Element            | Name           | Comment                 |
-|----------|--------------------|----------------|-------------------------|
-| Python   | Repository         | `arkiv-python` | Golem Base repo: `python-sdk` move and rename to `arkiv-python-beta` |
-| TS/JS    | Repository         | `arkiv-js` | Golem Base repo: `typescript-sdk` move and rename to `arkiv-js-beta` |
-| Rust    | Repository         | `arkiv-rust` | Golem Base repo: `rust-sdk` move and rename to `arkiv-rust-beta`|
-| Python   | PIP        | `pip install arkiv-sdk` | or `pip install arkiv` as `arkiv` is not available for rust |
-| TS/JS    | NPM        | `npm install arkiv-sdk` | or `npm install arkiv` as `arkiv` is not available for rust |
-| Rust    | Cargo        | `cargo add arkiv-sdk` |
+| Language | Element    | Name           | Comment                 |
+|----------|------------|----------------|-------------------------|
+| Python   | Repository | `arkiv-python` | Golem Base repo: `python-sdk` move and rename to `arkiv-python-beta` |
+| TS/JS    | Repository | `arkiv-ts`     | Golem Base repo: `typescript-sdk` move and rename to `arkiv-ts-beta` |
+| Rust     | Repository | `arkiv-rust`   | Golem Base repo: `rust-sdk` move and rename to `arkiv-rust-beta`|
+| Python   | PIP        | `pip install arkiv`   | or `pip install arkiv-sdk` as `arkiv` is not available for Rust |
+| TS/JS    | NPM        | `npm install arkiv`   | or `npm install arkiv-sdk` as `arkiv` is not available for Rust |
+| Rust     | Cargo      | `cargo add arkiv-sdk` | `arkiv` is not available for Rust |
+
+Timeline:
+1. The repositories `arkiv-python-beta` and `arkiv-js-beta` should be on github.com/arkiv-netowrk as soon as possible, well before Token 2049 in any case.
+1. `arkiv-python` and  `arkiv-js` should initially be private repos.
+1. Once we have a reasonable initial scope for `arkiv-python` and  `arkiv-js` we should make them public.
+1. The`*-beta` could be archived once we're happy with the new SDKs.
 
 ### Client
 
